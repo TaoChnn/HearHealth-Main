@@ -8,8 +8,34 @@ const FREQUENCY_COUNTDOWN_SECONDS = 3
 const LEVEL_ADVANCE_DELAY_MS = 900
 const NEXT_FREQUENCY_DELAY_MS = 1400
 const BAR_FUSE_DELAY_MS = 420
+const REPORT_SAVE_TIMEOUT_MS = 8000
 const RELATIVE_LEVELS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 const LATEST_TEST_RESULT_KEY = 'latestHearingTestResult'
+
+function testRecordIdMeta(value) {
+  const id = typeof value === 'string' ? value.trim() : ''
+  return {
+    hasId: Boolean(id),
+    idLength: id.length,
+    idPrefix: id.slice(0, 6)
+  }
+}
+
+function withTimeout(promise, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('save test record timeout')), timeoutMs)
+    promise.then(
+      value => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      error => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
 
 Page({
   data: {
@@ -89,6 +115,7 @@ Page({
 
   onShow() {
     this.pageVisible = true
+    this.reportOpening = false
     const resumeAction = this.resumeAutomaticAction
     this.resumeAutomaticAction = ''
 
@@ -676,7 +703,7 @@ Page({
   },
 
   viewReport() {
-    if (!this.data.leftEarCompleted || !this.data.rightEarCompleted) return
+    if (!this.data.leftEarCompleted || !this.data.rightEarCompleted || this.reportOpening) return
 
     const result = {
       version: 1,
@@ -697,11 +724,33 @@ Page({
       return
     }
 
-    // 云端留档（按用户存 test_records 集合），失败不影响本地报告
-    callUser('saveTestRecord', { result }).catch(() => {})
+    this.reportOpening = true
+    wx.showLoading({ title: '正在保存报告', mask: true })
 
+    // AI 只接受云端 testRecordId；保存失败或超时仍进入基础报告，不让 AI 阻断原流程。
+    withTimeout(callUser('saveTestRecord', { result }), REPORT_SAVE_TIMEOUT_MS)
+      .then(saved => {
+        const testRecordId = saved && typeof saved._id === 'string' ? saved._id.trim() : ''
+        console.info('[test] saveTestRecord success', testRecordIdMeta(testRecordId))
+        if (!testRecordId) throw new Error('missing test record id')
+        this.openReport(`/pages/test/report?testRecordId=${encodeURIComponent(testRecordId)}`)
+      })
+      .catch(error => {
+        console.error('[hearing-test] saveTestRecord failed', {
+          message: error && error.message ? error.message : 'unknown error'
+        })
+        this.openReport('/pages/test/report?aiUnavailable=record-sync-failed')
+      })
+  },
+
+  openReport(url) {
+    wx.hideLoading()
     wx.navigateTo({
-      url: '/pages/test/report'
+      url,
+      fail: () => {
+        this.reportOpening = false
+        wx.showToast({ title: '暂时无法打开报告', icon: 'none' })
+      }
     })
   },
 

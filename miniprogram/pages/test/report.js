@@ -1,6 +1,26 @@
 const LATEST_TEST_RESULT_KEY = 'latestHearingTestResult'
 const COMMUNITY_SHARE_DRAFT_KEY = 'hearingReportShareDraft'
+const AI_FIXED_DISCLAIMER = 'AI 解读仅用于听力健康教育和初步筛查结果解释，不构成医学诊断，也不能替代专业听力检查或医生建议。'
 const { callUser } = require('../../utils/auth')
+const { analyzeHearingTest } = require('../../utils/ai')
+
+function readTestRecordId(value) {
+  if (typeof value !== 'string') return ''
+  try {
+    return decodeURIComponent(value).trim()
+  } catch (error) {
+    return ''
+  }
+}
+
+function testRecordIdMeta(value) {
+  const id = typeof value === 'string' ? value : ''
+  return {
+    exists: Boolean(id),
+    length: id.length,
+    prefix: id.slice(0, 6)
+  }
+}
 
 Page({
   data: {
@@ -9,11 +29,20 @@ Page({
     completedAtText: '',
     totalDetectedText: '0 / 12',
     earSummaries: [],
-    navigating: false
+    navigating: false,
+    aiStatus: 'idle',
+    aiAnalysis: null,
+    aiErrorMessage: '',
+    aiCanRetry: false,
+    aiFixedDisclaimer: AI_FIXED_DISCLAIMER
   },
 
-  onLoad() {
+  onLoad(options) {
     this.chartReady = false
+    this.testRecordId = readTestRecordId(options && options.testRecordId)
+    console.info('[report] testRecordId received', testRecordIdMeta(this.testRecordId))
+    this.aiUnavailableReason = options && options.aiUnavailable
+    this.aiStarted = false
     this.loadLatestResult()
   },
 
@@ -66,7 +95,94 @@ Page({
       earSummaries: [leftSummary, rightSummary]
     }, () => {
       if (this.chartReady) this.drawThresholdChart()
+      this.startAiAnalysis()
     })
+  },
+
+  startAiAnalysis() {
+    if (this.aiStarted || !this.data.hasResult) return
+    this.aiStarted = true
+
+    if (!this.testRecordId) {
+      this.setData({
+        aiStatus: 'error',
+        aiAnalysis: null,
+        aiErrorMessage: this.aiUnavailableReason === 'record-sync-failed'
+          ? '测试记录暂未同步到云端，暂时无法生成 AI 解读'
+          : '这份报告没有可用的云端记录标识，暂时无法生成 AI 解读',
+        aiCanRetry: false
+      })
+      return
+    }
+
+    this.requestAiAnalysis()
+  },
+
+  requestAiAnalysis() {
+    if (!this.testRecordId || this.data.aiStatus === 'loading') return
+    this.setData({
+      aiStatus: 'loading',
+      aiAnalysis: null,
+      aiErrorMessage: '',
+      aiCanRetry: false
+    })
+
+    analyzeHearingTest(this.testRecordId)
+      .then(result => {
+        if (!result || !result.analysis) throw new Error('missing analysis')
+        this.setData({
+          aiStatus: 'success',
+          aiAnalysis: this.prepareAnalysisForView(result.analysis),
+          aiErrorMessage: '',
+          aiCanRetry: false
+        })
+      })
+      .catch(error => {
+        console.warn('[report] AI analysis failed', {
+          code: error && error.code ? error.code : '',
+          debug: error && error.debug ? error.debug : null
+        })
+        this.setData({
+          aiStatus: 'error',
+          aiAnalysis: null,
+          aiErrorMessage: this.getAiErrorMessage(error && error.code),
+          aiCanRetry: true
+        })
+      })
+  },
+
+  retryAiAnalysis() {
+    this.requestAiAnalysis()
+  },
+
+  getAiErrorMessage(code) {
+    switch (code) {
+      case 'CONFIG_MISSING':
+        return 'AI 服务尚未完成配置，基础听力报告仍可正常查看'
+      case 'RECORD_NOT_FOUND':
+        return '没有找到对应的云端测试记录，暂时无法生成 AI 解读'
+      case 'MODEL_INVALID_RESPONSE':
+        return 'AI 返回内容未通过安全校验，请稍后重试'
+      case 'CACHE_ERROR':
+        return 'AI 分析缓存暂时不可用，请稍后重试'
+      default:
+        return 'AI 解读暂时不可用，请稍后重试'
+    }
+  },
+
+  prepareAnalysisForView(analysis) {
+    const labels = {
+      routine: '日常建议',
+      monitor: '持续关注',
+      'professional-check': '建议专业检查'
+    }
+    return {
+      ...analysis,
+      recommendations: analysis.recommendations.map(item => ({
+        ...item,
+        priorityLabel: labels[item.priority] || '健康建议'
+      }))
+    }
   },
 
   isValidResult(result) {
