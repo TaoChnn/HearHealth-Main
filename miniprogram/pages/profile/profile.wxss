@@ -201,6 +201,10 @@
   background: rgba(0, 102, 204, 0.055);
 }
 
+.menu-icon-box--points-shop {
+  background: rgba(0, 102, 204, 0.07);
+}
+
 .menu-icon-box--settings {
   background: rgba(0, 102, 204, 0.045);
 }
