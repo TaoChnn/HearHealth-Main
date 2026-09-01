@@ -36,6 +36,12 @@ Page({
             title: '护耳技能库',
             icon: '/images/icons/goods.png',
             url: '/pages/skill/list'
+          },
+          {
+            id: 'points-shop',
+            title: '积分商城',
+            icon: '/images/icons/points.svg',
+            url: '/pages/profile/points-shop'
           }
         ]
       },

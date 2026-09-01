@@ -16,6 +16,7 @@
     "pages/profile/edit-profile",
     "pages/profile/settings",
     "pages/profile/about",
+    "pages/profile/points-shop",
     "pages/skill/list",
     "pages/skill/detail"
   ],
