@@ -447,7 +447,6 @@
 
 .ai-item-text,
 .ai-caution,
-.ai-evidence-line,
 .ai-note-line {
   color: var(--color-ink-muted-48);
   font-size: var(--text-fine-print);
@@ -467,25 +466,6 @@
   margin-top: var(--spacing-xs);
   padding-top: var(--spacing-xs);
   border-top: 2rpx solid var(--color-divider-soft);
-}
-
-.ai-evidence {
-  margin-top: var(--spacing-xs);
-}
-
-.ai-evidence-line {
-  display: flex;
-  align-items: flex-start;
-  margin-top: var(--spacing-xxs);
-}
-
-.ai-evidence-dot {
-  flex-shrink: 0;
-  width: 8rpx;
-  height: 8rpx;
-  margin: 13rpx var(--spacing-xs) 0 0;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
 }
 
 .ai-priority {

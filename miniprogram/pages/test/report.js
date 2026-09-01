@@ -13,15 +13,6 @@ function readTestRecordId(value) {
   }
 }
 
-function testRecordIdMeta(value) {
-  const id = typeof value === 'string' ? value : ''
-  return {
-    exists: Boolean(id),
-    length: id.length,
-    prefix: id.slice(0, 6)
-  }
-}
-
 Page({
   data: {
     hasResult: false,
@@ -40,7 +31,6 @@ Page({
   onLoad(options) {
     this.chartReady = false
     this.testRecordId = readTestRecordId(options && options.testRecordId)
-    console.info('[report] testRecordId received', testRecordIdMeta(this.testRecordId))
     this.aiUnavailableReason = options && options.aiUnavailable
     this.aiStarted = false
     this.loadLatestResult()
@@ -139,8 +129,7 @@ Page({
       })
       .catch(error => {
         console.warn('[report] AI analysis failed', {
-          code: error && error.code ? error.code : '',
-          debug: error && error.debug ? error.debug : null
+          code: error && error.code ? error.code : 'AI_REQUEST_FAILED'
         })
         this.setData({
           aiStatus: 'error',
@@ -177,12 +166,43 @@ Page({
       'professional-check': '建议专业检查'
     }
     return {
-      ...analysis,
-      recommendations: analysis.recommendations.map(item => ({
-        ...item,
-        priorityLabel: labels[item.priority] || '健康建议'
-      }))
+      overview: this.cleanAiDisplayText(analysis.overview),
+      findings: (Array.isArray(analysis.findings) ? analysis.findings : [])
+        .map(item => ({
+          title: this.cleanAiDisplayText(item && item.title),
+          explanation: this.cleanAiDisplayText(item && item.explanation)
+        }))
+        .filter(item => item.title || item.explanation),
+      earComparison: {
+        summary: this.cleanAiDisplayText(analysis.earComparison && analysis.earComparison.summary),
+        caution: this.cleanAiDisplayText(analysis.earComparison && analysis.earComparison.caution)
+      },
+      recommendations: (Array.isArray(analysis.recommendations) ? analysis.recommendations : []).map(item => ({
+        priority: item.priority,
+        priorityLabel: labels[item.priority] || '健康建议',
+        text: this.cleanAiDisplayText(item.text),
+        reason: this.cleanAiDisplayText(item.reason)
+      })).filter(item => item.text || item.reason),
+      redFlags: this.cleanAiDisplayList(analysis.redFlags),
+      limitations: this.cleanAiDisplayList(analysis.limitations)
     }
+  },
+
+  cleanAiDisplayText(value) {
+    if (typeof value !== 'string') return ''
+    return value
+      .replace(/\bdata(?:\.[A-Za-z_$][\w$]*)+\b/gi, '')
+      .replace(/\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b/g, '')
+      .replace(/\b[a-z]{2,}(?:[A-Z][A-Za-z0-9]*)+\b/g, '')
+      .replace(/\b(?:routine|monitor|professional-check|relative-gain-threshold)\b/gi, '')
+      .replace(/^\s*[:：,，;；|/\\–—-]+\s*/g, '')
+      .replace(/\s*[:：,，;；|/\\–—-]+\s*$/g, '')
+      .trim()
+  },
+
+  cleanAiDisplayList(value) {
+    if (!Array.isArray(value)) return []
+    return value.map(this.cleanAiDisplayText).filter(Boolean)
   },
 
   isValidResult(result) {

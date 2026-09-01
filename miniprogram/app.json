@@ -2,6 +2,7 @@
   "pages": [
     "pages/splash/splash",
     "pages/home/home",
+    "pages/ai-chat/ai-chat",
     "pages/stats/stats",
     "pages/community/community",
     "pages/profile/profile",

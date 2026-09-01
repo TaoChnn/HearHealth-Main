@@ -29,60 +29,31 @@ function parseResponseBody(rawBody) {
   }
 }
 
-function readResponseHeader(headers, names) {
-  if (!headers || typeof headers !== 'object') return ''
-  for (const name of names) {
-    const value = headers[name]
-    if (Array.isArray(value) && value.length) return safeString(value[0], 256)
-    if (value !== null && value !== undefined && value !== '') return safeString(value, 256)
-  }
-  return ''
-}
-
-function buildProviderDebug({ response, responseBody, endpoint, model }) {
+function buildProviderDebug({ response, responseBody }) {
   const providerError = responseBody && typeof responseBody === 'object'
     ? responseBody.error
     : null
   const providerCode = responseBody && typeof responseBody === 'object'
     ? responseBody.code || (providerError && providerError.code)
     : ''
-  const providerMessage = responseBody && typeof responseBody === 'object'
-    ? responseBody.message || (providerError && providerError.message)
-    : responseBody
-  const providerRequestId = responseBody && typeof responseBody === 'object'
-    ? responseBody.request_id || responseBody.requestId
-    : ''
 
   return {
-    debugStage: 'qwen-http',
     httpStatus: Number(response && response.statusCode) || 0,
-    providerCode: safeString(providerCode, 256),
-    providerMessage: safeString(providerMessage),
-    providerRequestId: safeString(providerRequestId, 256) || readResponseHeader(
-      response && response.headers,
-      ['x-request-id', 'x-acs-request-id', 'x-dashscope-request-id', 'request-id']
-    ),
-    model: safeString(model, 256),
-    host: endpoint.hostname,
-    path: endpoint.pathname
+    providerCode: safeString(providerCode, 256)
   }
 }
 
-function buildNetworkDebug(error, endpoint, model) {
+function buildNetworkDebug(error) {
   return {
-    debugStage: 'qwen-network',
-    networkCode: safeString(error && error.code, 128),
-    networkMessage: safeString(error && error.message),
-    host: endpoint.hostname,
-    model: safeString(model, 256)
+    networkCode: safeString(error && error.code, 128)
   }
 }
 
-function createNetworkRequestError(error, endpoint, model) {
+function createNetworkRequestError(error) {
   return new QwenClientError(
     'MODEL_REQUEST_FAILED',
     'AI 服务网络请求失败',
-    { debug: buildNetworkDebug(error, endpoint, model) }
+    { debug: buildNetworkDebug(error) }
   )
 }
 
@@ -149,9 +120,7 @@ function postJson(endpoint, apiKey, payload) {
                 statusCode: response.statusCode,
                 debug: buildProviderDebug({
                   response,
-                  responseBody,
-                  endpoint,
-                  model: payload.model
+                  responseBody
                 })
               }
             ))
@@ -166,7 +135,7 @@ function postJson(endpoint, apiKey, payload) {
         })
       })
     } catch (error) {
-      reject(createNetworkRequestError(error, endpoint, payload.model))
+      reject(createNetworkRequestError(error))
       return
     }
 
@@ -176,10 +145,7 @@ function postJson(endpoint, apiKey, payload) {
         'AI 服务请求超时',
         {
           debug: {
-            debugStage: 'qwen-timeout',
-            networkCode: 'REQUEST_TIMEOUT',
-            host: endpoint.hostname,
-            model: safeString(payload.model, 256)
+            networkCode: 'REQUEST_TIMEOUT'
           }
         }
       ))
@@ -189,13 +155,13 @@ function postJson(endpoint, apiKey, payload) {
         reject(error)
         return
       }
-      reject(createNetworkRequestError(error, endpoint, payload.model))
+      reject(createNetworkRequestError(error))
     })
     try {
       request.write(body)
       request.end()
     } catch (error) {
-      reject(createNetworkRequestError(error, endpoint, payload.model))
+      reject(createNetworkRequestError(error))
     }
   })
 }
@@ -228,19 +194,21 @@ async function requestHearingAnalysis({ systemPrompt, userPrompt, schema }) {
   return { content, model: config.model }
 }
 
-async function requestQwenDiagnostic() {
+async function requestHearingHealthChat({ systemPrompt, messages }) {
   const config = getQwenConfig()
   const response = await postJson(config.endpoint, config.apiKey, {
     model: config.model,
     messages: [
-      { role: 'user', content: 'Reply with exactly: QWEN_CLOUD_OK' }
-    ]
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ],
+    enable_thinking: false
   })
 
   const content = response && response.choices && response.choices[0] &&
     response.choices[0].message && response.choices[0].message.content
   if (typeof content !== 'string' || !content.trim()) {
-    throw new QwenClientError('MODEL_INVALID_RESPONSE', 'Qwen diagnostic returned no content')
+    throw new QwenClientError('MODEL_INVALID_RESPONSE', 'AI 助手未返回有效内容')
   }
 
   return { content, model: config.model }
@@ -250,5 +218,5 @@ module.exports = {
   QwenClientError,
   getQwenConfig,
   requestHearingAnalysis,
-  requestQwenDiagnostic
+  requestHearingHealthChat
 }

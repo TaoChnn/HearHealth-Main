@@ -12,15 +12,6 @@ const REPORT_SAVE_TIMEOUT_MS = 8000
 const RELATIVE_LEVELS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 const LATEST_TEST_RESULT_KEY = 'latestHearingTestResult'
 
-function testRecordIdMeta(value) {
-  const id = typeof value === 'string' ? value.trim() : ''
-  return {
-    hasId: Boolean(id),
-    idLength: id.length,
-    idPrefix: id.slice(0, 6)
-  }
-}
-
 function withTimeout(promise, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('save test record timeout')), timeoutMs)
@@ -731,13 +722,12 @@ Page({
     withTimeout(callUser('saveTestRecord', { result }), REPORT_SAVE_TIMEOUT_MS)
       .then(saved => {
         const testRecordId = saved && typeof saved._id === 'string' ? saved._id.trim() : ''
-        console.info('[test] saveTestRecord success', testRecordIdMeta(testRecordId))
         if (!testRecordId) throw new Error('missing test record id')
         this.openReport(`/pages/test/report?testRecordId=${encodeURIComponent(testRecordId)}`)
       })
       .catch(error => {
         console.error('[hearing-test] saveTestRecord failed', {
-          message: error && error.message ? error.message : 'unknown error'
+          code: error && error.code ? error.code : 'SAVE_TEST_RECORD_FAILED'
         })
         this.openReport('/pages/test/report?aiUnavailable=record-sync-failed')
       })

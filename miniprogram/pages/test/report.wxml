@@ -104,12 +104,6 @@
             <view class="ai-list-card" wx:for="{{aiAnalysis.findings}}" wx:for-item="finding" wx:key="title">
               <view class="ai-item-title">{{finding.title}}</view>
               <view class="ai-item-text">{{finding.explanation}}</view>
-              <view class="ai-evidence" wx:if="{{finding.evidence.length}}">
-                <view class="ai-evidence-line" wx:for="{{finding.evidence}}" wx:for-item="evidence" wx:key="*this">
-                  <view class="ai-evidence-dot"></view>
-                  <view>{{evidence}}</view>
-                </view>
-              </view>
             </view>
           </view>
 

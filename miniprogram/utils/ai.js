@@ -1,29 +1,8 @@
 class AiRequestError extends Error {
-  constructor(code, message, debug = null) {
+  constructor(code, message) {
     super(message)
     this.name = 'AiRequestError'
     this.code = code
-    this.debug = debug
-  }
-}
-
-function normalizeSafeDebug(value) {
-  if (!value || typeof value !== 'object') return null
-  const stringOrEmpty = field => (typeof value[field] === 'string' ? value[field] : '')
-  const numberOrNull = field => (Number.isFinite(value[field]) ? value[field] : null)
-  return {
-    testRecordIdExists: Boolean(value.testRecordIdExists),
-    testRecordIdLength: numberOrNull('testRecordIdLength'),
-    testRecordIdPrefix: stringOrEmpty('testRecordIdPrefix'),
-    resultDataType: stringOrEmpty('resultDataType'),
-    resultDataLength: numberOrNull('resultDataLength'),
-    documentExists: Boolean(value.documentExists),
-    ownershipMatch: Boolean(value.ownershipMatch),
-    openidFingerprint: stringOrEmpty('openidFingerprint'),
-    recordOpenidFingerprint: stringOrEmpty('recordOpenidFingerprint'),
-    lookupErrorCode: value.lookupErrorCode === null
-      ? null
-      : stringOrEmpty('lookupErrorCode')
   }
 }
 
@@ -37,8 +16,7 @@ function callAi(action, data = {}) {
       const error = result.error || {}
       throw new AiRequestError(
         error.code || 'MODEL_REQUEST_FAILED',
-        error.message || 'AI 解读服务暂时不可用',
-        normalizeSafeDebug(result.debug)
+        error.message || 'AI 解读服务暂时不可用'
       )
     }
     return result.data
@@ -46,10 +24,7 @@ function callAi(action, data = {}) {
     const requestError = error instanceof AiRequestError
       ? error
       : new AiRequestError('MODEL_REQUEST_FAILED', 'AI 解读服务暂时不可用')
-    console.warn('[ai] request failed', {
-      code: requestError.code,
-      debug: requestError.debug || null
-    })
+    console.warn('[ai] request failed', { action, code: requestError.code })
     throw requestError
   })
 }
@@ -59,9 +34,15 @@ function analyzeHearingTest(testRecordId) {
   return callAi('analyzeHearingTest', { testRecordId: normalizedId })
 }
 
+function chatHearingHealth(messages) {
+  return callAi('chatHearingHealth', {
+    messages: Array.isArray(messages) ? messages : []
+  })
+}
+
 module.exports = {
   AiRequestError,
-  normalizeSafeDebug,
   callAi,
-  analyzeHearingTest
+  analyzeHearingTest,
+  chatHearingHealth
 }

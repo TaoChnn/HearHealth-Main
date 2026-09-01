@@ -1,9 +1,9 @@
 const crypto = require('crypto')
 const cloud = require('wx-server-sdk')
-const BUILD_ID = 'ai-agent-20260901-debugstage-v1'
 const {
   PROMPT_VERSION,
   SYSTEM_PROMPT,
+  CHAT_SYSTEM_PROMPT,
   buildHearingAnalysisUserPrompt
 } = require('./prompts')
 const {
@@ -15,7 +15,7 @@ const {
   QwenClientError,
   getQwenConfig,
   requestHearingAnalysis,
-  requestQwenDiagnostic
+  requestHearingHealthChat
 } = require('./qwen-client')
 
 cloud.init({
@@ -25,101 +25,13 @@ cloud.init({
 const db = cloud.database()
 const TEST_COLLECTION = 'test_records'
 const ANALYSIS_COLLECTION = 'ai_test_analyses'
+const MAX_CHAT_MESSAGES = 12
+const MAX_CHAT_CONTENT_LENGTH = 1000
 class AiFunctionError extends Error {
-  constructor(code, message, debug = null) {
+  constructor(code, message) {
     super(message)
     this.name = 'AiFunctionError'
     this.code = code
-    this.debug = debug
-  }
-}
-
-function getDiagnosticsData() {
-  const baseUrl = String(process.env.DASHSCOPE_BASE_URL || '').trim()
-  let baseUrlHost = ''
-  if (baseUrl) {
-    try {
-      baseUrlHost = new URL(baseUrl).hostname
-    } catch (error) {
-      baseUrlHost = ''
-    }
-  }
-  return {
-    buildId: BUILD_ID,
-    hasApiKey: Boolean(process.env.DASHSCOPE_API_KEY),
-    hasBaseUrl: Boolean(process.env.DASHSCOPE_BASE_URL),
-    model: process.env.DASHSCOPE_MODEL || '',
-    baseUrlHost
-  }
-}
-
-async function runQwenDiagnostics() {
-  const diagnostics = getDiagnosticsData()
-  try {
-    const result = await requestQwenDiagnostic()
-    return {
-      success: true,
-      data: {
-        buildId: BUILD_ID,
-        qwenReachable: true,
-        model: result.model || diagnostics.model,
-        baseUrlHost: diagnostics.baseUrlHost,
-        responseReceived: true,
-        contentPreview: result.content.slice(0, 100)
-      }
-    }
-  } catch (error) {
-    const fallbackDebug = buildUnexpectedModelDebug(
-      error,
-      diagnostics.model,
-      diagnostics.baseUrlHost ? { hostname: diagnostics.baseUrlHost } : null
-    )
-    return {
-      success: false,
-      buildId: BUILD_ID,
-      error: {
-        code: 'MODEL_REQUEST_FAILED',
-        message: 'Qwen cloud diagnostic failed'
-      },
-      debug: sanitizeQwenDebug(error && error.debug, fallbackDebug)
-    }
-  }
-}
-
-function createDiagnosticHearingRecord() {
-  const frequencies = [125, 250, 500, 1000, 2000, 4000]
-  const leftThresholds = [10, 10, 15, 15, 20, 20]
-  const rightThresholds = [10, 15, 15, 20, 20, 25]
-  const answeredAtBase = Date.parse('2026-09-01T00:00:00.000Z')
-  const createEarResults = thresholds => frequencies.map((frequency, index) => ({
-    frequency,
-    detected: true,
-    thresholdPercent: thresholds[index],
-    maxTestedPercent: thresholds[index],
-    attempts: index + 1,
-    answeredAt: answeredAtBase + index * 1000
-  }))
-
-  return {
-    measurement: 'relative-gain-threshold',
-    completedAt: new Date('2026-09-01T00:00:00.000Z'),
-    detectedLeft: 6,
-    detectedRight: 6,
-    ears: {
-      left: createEarResults(leftThresholds),
-      right: createEarResults(rightThresholds)
-    }
-  }
-}
-
-function buildHearingValidationDebug(content, jsonParseSuccess, schemaValid) {
-  const responseContent = typeof content === 'string' ? content : ''
-  return {
-    debugStage: 'hearing-analysis-validation',
-    jsonParseSuccess,
-    schemaValid,
-    responseContentLength: responseContent.length,
-    responsePrefix: responseContent.replace(/\s+/g, ' ').slice(0, 100)
   }
 }
 
@@ -136,9 +48,12 @@ function sanitizeAnalysisText(value) {
     .replace(/\b(?:data\.)?measurement\s*[:=]\s*['"]?relative-gain-threshold['"]?/gi, '本次采用相对音量阈值筛查')
     .replace(/\brelative-gain-threshold\b/gi, '相对音量阈值筛查')
     .replace(/\bthresholdPercent\b\s*/gi, '相对音量阈值')
-    .replace(/\bschemaVersion\b/gi, '报告版本')
+    .replace(/\bschemaVersion\b/gi, '')
     .replace(/\bmeasurement\b/gi, '测试方式')
     .replace(/\bdata\./gi, '')
+    .replace(/\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b/g, '')
+    .replace(/\b[a-z]{2,}(?:[A-Z][A-Za-z0-9]*)+\b/g, '')
+    .replace(/\b(?:routine|monitor|professional-check)\b/gi, '')
     .replace(/```[\w-]*\s*/g, '')
     .replace(/`/g, '')
     .replace(/\*\*/g, '')
@@ -149,8 +64,15 @@ function sanitizeAnalysisText(value) {
     .replace(/^\s*[-*+]\s+/gm, '')
     .replace(/^\s*\d+[.)]\s+/gm, '')
     .replace(/<\/?[A-Za-z][^>]*>/g, '')
+    .replace(/^\s*[:：,，;；|/\\–—-]+\s*/g, '')
+    .replace(/\s*[:：,，;；|/\\–—-]+\s*$/g, '')
     .replace(/([\u4e00-\u9fff])[ \t]+(?=[\u4e00-\u9fff])/g, '$1')
     .trim()
+}
+
+function sanitizeAnalysisTextList(value) {
+  if (!Array.isArray(value)) return []
+  return value.map(sanitizeAnalysisText).filter(Boolean)
 }
 
 function sanitizeHearingAnalysisText(analysis) {
@@ -161,7 +83,7 @@ function sanitizeHearingAnalysisText(analysis) {
       ...item,
       title: sanitizeAnalysisText(item.title),
       explanation: sanitizeAnalysisText(item.explanation),
-      evidence: item.evidence.map(sanitizeAnalysisText)
+      evidence: sanitizeAnalysisTextList(item.evidence)
     })),
     earComparison: {
       ...analysis.earComparison,
@@ -173,115 +95,86 @@ function sanitizeHearingAnalysisText(analysis) {
       text: sanitizeAnalysisText(item.text),
       reason: sanitizeAnalysisText(item.reason)
     })),
-    redFlags: analysis.redFlags.map(sanitizeAnalysisText),
-    limitations: analysis.limitations.map(sanitizeAnalysisText),
+    redFlags: sanitizeAnalysisTextList(analysis.redFlags),
+    limitations: sanitizeAnalysisTextList(analysis.limitations),
     disclaimer: sanitizeAnalysisText(analysis.disclaimer)
   }
 }
 
-async function runHearingAnalysisDiagnostics() {
-  const diagnostics = getDiagnosticsData()
-  let modelResponse
+function validateChatMessages(value) {
+  if (!Array.isArray(value)) {
+    throw new AiFunctionError('INVALID_CHAT_MESSAGES', '聊天消息格式无效')
+  }
+
+  const messages = []
+  for (let index = value.length - 1; index >= 0 && messages.length < MAX_CHAT_MESSAGES; index -= 1) {
+    const item = value[index]
+    if (!item || (item.role !== 'user' && item.role !== 'assistant')) continue
+    if (typeof item.content !== 'string') {
+      throw new AiFunctionError('INVALID_CHAT_MESSAGES', '聊天消息格式无效')
+    }
+    const content = item.content.trim()
+    if (!content || content.length > MAX_CHAT_CONTENT_LENGTH) {
+      throw new AiFunctionError('INVALID_CHAT_MESSAGES', '聊天消息内容无效')
+    }
+    messages.unshift({ role: item.role, content })
+  }
+
+  if (!messages.length || messages[messages.length - 1].role !== 'user') {
+    throw new AiFunctionError('INVALID_CHAT_MESSAGES', '请先输入要咨询的问题')
+  }
+  return messages
+}
+
+function sanitizeChatReply(value) {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/```[\w-]*\s*/g, '')
+    .replace(/`/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/\*/g, '')
+    .replace(/<\/?[A-Za-z][^>]*>/g, '')
+    .trim()
+}
+
+async function chatHearingHealth(event) {
+  const messages = validateChatMessages(event && event.messages)
+  const { model } = getQwenConfig()
+  let response
   try {
-    modelResponse = await requestHearingAnalysis({
-      systemPrompt: SYSTEM_PROMPT,
-      userPrompt: buildHearingAnalysisUserPrompt(createDiagnosticHearingRecord()),
-      schema: HEARING_ANALYSIS_SCHEMA
+    response = await requestHearingHealthChat({
+      systemPrompt: CHAT_SYSTEM_PROMPT,
+      messages
     })
   } catch (error) {
-    const fallbackDebug = buildUnexpectedModelDebug(
-      error,
-      diagnostics.model,
-      diagnostics.baseUrlHost ? { hostname: diagnostics.baseUrlHost } : null
+    logModelError('chatHearingHealth', error)
+    throw new AiFunctionError(
+      error instanceof QwenClientError ? error.code : 'MODEL_REQUEST_FAILED',
+      error && error.message ? error.message : 'AI 助手请求失败'
     )
-    return {
-      success: false,
-      buildId: BUILD_ID,
-      error: {
-        code: 'MODEL_REQUEST_FAILED',
-        message: 'Qwen hearing analysis diagnostic failed'
-      },
-      debug: sanitizeQwenDebug(error && error.debug, fallbackDebug)
-    }
   }
 
-  let analysis
-  try {
-    analysis = JSON.parse(modelResponse.content)
-  } catch (error) {
-    return {
-      success: false,
-      buildId: BUILD_ID,
-      error: {
-        code: 'MODEL_INVALID_RESPONSE',
-        message: 'AI 返回结构未通过校验'
-      },
-      debug: buildHearingValidationDebug(modelResponse.content, false, false)
-    }
+  const reply = sanitizeChatReply(response.content)
+  if (!reply) {
+    throw new AiFunctionError('MODEL_INVALID_RESPONSE', 'AI 助手未返回有效内容')
   }
-
-  const schemaValid = validateHearingAnalysis(analysis)
-  if (!schemaValid) {
-    return {
-      success: false,
-      buildId: BUILD_ID,
-      error: {
-        code: 'MODEL_INVALID_RESPONSE',
-        message: 'AI 返回结构未通过校验'
-      },
-      debug: buildHearingValidationDebug(modelResponse.content, true, false)
-    }
-  }
-
-  return {
-    success: true,
-    data: {
-      buildId: BUILD_ID,
-      hearingAnalysisReachable: true,
-      model: modelResponse.model || diagnostics.model,
-      schemaValid: true,
-      thinkingDisabled: true,
-      overviewPreview: analysis.overview.replace(/\s+/g, ' ').slice(0, 100)
-    }
-  }
+  return { reply, model: response.model || model }
 }
 
-function buildUnexpectedModelDebug(error, model, endpoint) {
-  return {
-    debugStage: 'qwen-runtime',
-    networkCode: String(error && error.code || 'UNEXPECTED_QWEN_ERROR').slice(0, 128),
-    networkMessage: String(error && error.message || 'Qwen request failed').slice(0, 1000),
-    model: String(model || '').slice(0, 256),
-    host: endpoint && endpoint.hostname ? endpoint.hostname : ''
-  }
-}
-
-function sanitizeQwenDebug(debug, fallbackDebug) {
-  const allowedStages = ['qwen-http', 'qwen-network', 'qwen-timeout', 'qwen-runtime']
-  if (!debug || typeof debug !== 'object' || !allowedStages.includes(debug.debugStage)) {
-    return fallbackDebug
-  }
-
-  const sanitized = { debugStage: debug.debugStage }
-  if (Number.isFinite(Number(debug.httpStatus))) {
-    sanitized.httpStatus = Number(debug.httpStatus)
-  }
-  const stringFields = [
-    'providerCode',
-    'providerMessage',
-    'providerRequestId',
-    'networkCode',
-    'networkMessage',
-    'model',
-    'host',
-    'path'
-  ]
-  stringFields.forEach(field => {
-    if (debug[field] !== null && debug[field] !== undefined) {
-      sanitized[field] = String(debug[field]).slice(0, 1000)
-    }
+function logModelError(action, error) {
+  const details = error && error.debug && typeof error.debug === 'object'
+    ? error.debug
+    : {}
+  console.error('[aiFunctions] model request failed', {
+    action,
+    code: String(error && error.code || 'MODEL_REQUEST_FAILED').slice(0, 128),
+    httpStatus: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : null,
+    providerCode: typeof details.providerCode === 'string' ? details.providerCode.slice(0, 128) : '',
+    networkCode: typeof details.networkCode === 'string' ? details.networkCode.slice(0, 128) : ''
   })
-  return sanitized
 }
 
 async function ensureCollection(name) {
@@ -310,97 +203,32 @@ function createCacheId(testRecordId, promptVersion, model) {
     .digest('hex')
 }
 
-function openidFingerprint(value) {
-  return value
-    ? crypto.createHash('sha256').update(value).digest('hex').slice(0, 8)
-    : ''
-}
-
-function normalizeRecordData(rawData) {
-  if (Array.isArray(rawData)) return rawData[0] || null
-  return rawData && typeof rawData === 'object' ? rawData : null
-}
-
-function resultDataType(rawData) {
-  if (Array.isArray(rawData)) return 'array'
-  if (rawData === null || rawData === undefined) return 'null'
-  if (typeof rawData === 'object') return 'object'
-  return 'other'
-}
-
-function buildLookupDebug({
-  testRecordId,
-  rawData,
-  record,
-  openid,
-  ownRecordCount = null,
-  lookupErrorCode = null
-}) {
-  const id = typeof testRecordId === 'string' ? testRecordId : ''
-  const documentExists = Boolean(record)
-  const ownershipMatch = Boolean(record && record.openid === openid)
-  return {
-    debugStage: 'test-record-lookup',
-    testRecordIdExists: Boolean(id),
-    testRecordIdLength: id.length,
-    testRecordIdPrefix: id.slice(0, 6),
-    resultDataType: resultDataType(rawData),
-    resultDataLength: Array.isArray(rawData) ? rawData.length : null,
-    ownRecordCount: Number.isInteger(ownRecordCount) ? ownRecordCount : null,
-    documentExists,
-    ownershipMatch,
-    openidFingerprint: openidFingerprint(openid),
-    recordOpenidFingerprint: openidFingerprint(record && record.openid),
-    lookupErrorCode
-  }
-}
-
 async function findOwnedTestRecord(testRecordId, openid) {
   const normalizedId = typeof testRecordId === 'string' ? testRecordId.trim() : ''
   if (!normalizedId) {
     throw new AiFunctionError('INVALID_TEST_RECORD_ID', '测试记录标识无效')
   }
 
-  let rawData = null
+  let records
   try {
     const result = await db.collection(TEST_COLLECTION)
       .where({ openid })
       .limit(100)
       .get()
-    rawData = result && Array.isArray(result.data) ? result.data : []
+    records = result && Array.isArray(result.data) ? result.data : []
   } catch (error) {
-    const lookupErrorCode = String(
-      error && (error.errCode || error.code) || 'DOCUMENT_LOOKUP_FAILED'
-    )
-    throw new AiFunctionError(
-      'TEST_RECORD_LOOKUP_FAILED',
-      '读取测试记录失败',
-      buildLookupDebug({
-        testRecordId: normalizedId,
-        rawData: null,
-        record: null,
-        openid,
-        lookupErrorCode
-      })
-    )
+    console.error('[aiFunctions] test record lookup failed', {
+      code: String(error && (error.errCode || error.code) || 'DOCUMENT_LOOKUP_FAILED').slice(0, 128)
+    })
+    throw new AiFunctionError('TEST_RECORD_LOOKUP_FAILED', '读取测试记录失败')
   }
 
-  const record = rawData.find(item => (
+  const record = records.find(item => (
     item &&
     typeof item._id === 'string' &&
     item._id === normalizedId
   )) || null
-  const debug = buildLookupDebug({
-    testRecordId: normalizedId,
-    rawData,
-    record,
-    openid,
-    ownRecordCount: rawData.length
-  })
-  return {
-    record: debug.ownershipMatch ? record : null,
-    debug
-  }
+  return record && record.openid === openid ? record : null
 }
 
 async function readCompletedCache(cacheId, openid) {
@@ -445,48 +273,17 @@ async function saveCompletedCache({ cacheId, openid, testRecordId, analysis, mod
 
 async function analyzeHearingTest(event) {
   const { OPENID } = cloud.getWXContext()
-  const rawTestRecordId = event && typeof event.testRecordId === 'string'
-    ? event.testRecordId.trim()
-    : ''
   if (!OPENID) {
-    throw new AiFunctionError(
-      'RECORD_NOT_FOUND',
-      '没有找到可分析的测试记录',
-      buildLookupDebug({
-        testRecordId: rawTestRecordId,
-        rawData: null,
-        record: null,
-        openid: '',
-        lookupErrorCode: 'MISSING_OPENID'
-      })
-    )
+    throw new AiFunctionError('RECORD_NOT_FOUND', '没有找到可分析的测试记录')
   }
 
-  let testRecordId
-  try {
-    testRecordId = validateAnalyzeEvent(event)
-  } catch (error) {
-    error.debug = buildLookupDebug({
-      testRecordId: rawTestRecordId,
-      rawData: null,
-      record: null,
-      openid: OPENID,
-      lookupErrorCode: 'INVALID_TEST_RECORD_ID'
-    })
-    throw error
+  const testRecordId = validateAnalyzeEvent(event)
+  const record = await findOwnedTestRecord(testRecordId, OPENID)
+  if (!record) {
+    throw new AiFunctionError('RECORD_NOT_FOUND', '没有找到可分析的测试记录')
   }
 
-  const lookup = await findOwnedTestRecord(testRecordId, OPENID)
-  if (!lookup.record) {
-    throw new AiFunctionError(
-      'RECORD_NOT_FOUND',
-      '没有找到可分析的测试记录',
-      lookup.debug
-    )
-  }
-  const record = lookup.record
-
-  const { model, endpoint } = getQwenConfig()
+  const { model } = getQwenConfig()
   await ensureCollection(ANALYSIS_COLLECTION)
   const cacheId = createCacheId(testRecordId, PROMPT_VERSION, model)
   const cached = await readCompletedCache(cacheId, OPENID)
@@ -508,20 +305,11 @@ async function analyzeHearingTest(event) {
       schema: HEARING_ANALYSIS_SCHEMA
     })
   } catch (error) {
-    const fallbackDebug = buildUnexpectedModelDebug(error, model, endpoint)
-    const debug = sanitizeQwenDebug(error && error.debug, fallbackDebug)
+    logModelError('analyzeHearingTest', error)
     if (error instanceof QwenClientError) {
-      console.error('[aiFunctions] qwen request failed', {
-        code: error.code,
-        debug
-      })
-      throw new AiFunctionError(error.code, error.message, debug)
+      throw new AiFunctionError(error.code, error.message)
     }
-    console.error('[aiFunctions] qwen request failed', {
-      code: 'MODEL_REQUEST_FAILED',
-      debug
-    })
-    throw new AiFunctionError('MODEL_REQUEST_FAILED', 'AI 服务请求失败', debug)
+    throw new AiFunctionError('MODEL_REQUEST_FAILED', 'AI 服务请求失败')
   }
 
   let analysis
@@ -555,6 +343,7 @@ async function analyzeHearingTest(event) {
 function errorResponse(error) {
   const allowedCodes = [
     'CONFIG_MISSING',
+    'INVALID_CHAT_MESSAGES',
     'INVALID_TEST_RECORD_ID',
     'RECORD_NOT_FOUND',
     'TEST_RECORD_LOOKUP_FAILED',
@@ -567,6 +356,7 @@ function errorResponse(error) {
     : 'MODEL_REQUEST_FAILED'
   const fallbackMessages = {
     CONFIG_MISSING: 'AI 服务尚未完成配置',
+    INVALID_CHAT_MESSAGES: '聊天消息格式无效',
     INVALID_TEST_RECORD_ID: '测试记录标识无效',
     RECORD_NOT_FOUND: '没有找到可分析的测试记录',
     TEST_RECORD_LOOKUP_FAILED: '读取测试记录失败',
@@ -574,50 +364,26 @@ function errorResponse(error) {
     MODEL_INVALID_RESPONSE: 'AI 返回内容暂时无法使用',
     CACHE_ERROR: 'AI 分析缓存暂时不可用'
   }
-  const response = {
+  return {
     success: false,
-    buildId: BUILD_ID,
     error: {
       code,
       message: fallbackMessages[code]
     }
   }
-  const responseDebug = code === 'MODEL_REQUEST_FAILED'
-    ? sanitizeQwenDebug(error && error.debug, null)
-    : error && error.debug
-  if (responseDebug) response.debug = responseDebug
-  return response
 }
 
 exports.main = async event => {
-  if (event && event.action === 'diagnosticsHearingAnalysis') {
-    return runHearingAnalysisDiagnostics()
-  }
-  if (event && event.action === 'diagnosticsQwen') {
-    return runQwenDiagnostics()
-  }
-  if (event && event.action === 'diagnostics') {
-    return {
-      success: true,
-      data: getDiagnosticsData()
-    }
-  }
   try {
+    if (event && event.action === 'chatHearingHealth') {
+      const data = await chatHearingHealth(event)
+      return { success: true, data }
+    }
     if (!event || event.action !== 'analyzeHearingTest') {
-      throw new AiFunctionError(
-        'MODEL_REQUEST_FAILED',
-        '不支持的 AI 操作',
-        {
-          debugStage: 'qwen-runtime',
-          networkCode: 'UNSUPPORTED_AI_ACTION',
-          networkMessage: 'Unsupported AI action',
-          model: '',
-          host: ''
-        }
-      )
+      throw new AiFunctionError('MODEL_REQUEST_FAILED', '不支持的 AI 操作')
     }
     const data = await analyzeHearingTest(event)
-    return { success: true, buildId: BUILD_ID, data }
+    return { success: true, data }
   } catch (error) {
     return errorResponse(error)
   }
@@ -625,20 +391,14 @@ exports.main = async event => {
 
 exports._test = {
   AiFunctionError,
-  BUILD_ID,
   errorResponse,
-  getDiagnosticsData,
-  runQwenDiagnostics,
-  createDiagnosticHearingRecord,
-  buildHearingValidationDebug,
   sanitizeAnalysisText,
   sanitizeHearingAnalysisText,
-  runHearingAnalysisDiagnostics,
-  sanitizeQwenDebug,
+  validateChatMessages,
+  sanitizeChatReply,
+  chatHearingHealth,
   analyzeHearingTest,
   createCacheId,
-  normalizeRecordData,
-  buildLookupDebug,
   validateAnalyzeEvent,
   findOwnedTestRecord,
   readCompletedCache
