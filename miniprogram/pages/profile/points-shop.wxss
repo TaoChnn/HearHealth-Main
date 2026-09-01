@@ -71,6 +71,10 @@
   line-height: var(--leading-caption);
 }
 
+.balance-caption--error {
+  color: var(--color-danger);
+}
+
 .balance-medal {
   display: flex;
   width: 116rpx;
@@ -96,6 +100,10 @@
   border: 2rpx solid var(--color-divider-soft);
   border-radius: var(--radius-lg);
   background: var(--color-canvas);
+}
+
+.ledger-section {
+  padding-bottom: var(--spacing-sm);
 }
 
 .section-heading {
@@ -131,6 +139,85 @@
 
 .category-list {
   margin-top: var(--spacing-sm);
+}
+
+.ledger-state {
+  padding: var(--spacing-md) 0 var(--spacing-xs);
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  text-align: center;
+}
+
+.ledger-state--error {
+  color: var(--color-danger);
+}
+
+.retry-button {
+  display: flex;
+  width: 180rpx;
+  height: 64rpx;
+  align-items: center;
+  justify-content: center;
+  margin: var(--spacing-sm) auto 0;
+  border: 2rpx solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-primary);
+  font-size: var(--text-fine-print);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.retry-button::after {
+  border: none;
+}
+
+.ledger-list {
+  margin-top: var(--spacing-sm);
+}
+
+.ledger-row {
+  display: flex;
+  align-items: center;
+  min-height: 100rpx;
+  padding: var(--spacing-xs) 0;
+  border-top: 2rpx solid var(--color-divider-soft);
+}
+
+.ledger-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.ledger-title {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: var(--text-caption-strong);
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-time {
+  margin-top: var(--spacing-xxs);
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-fine-print);
+  line-height: var(--leading-caption);
+}
+
+.ledger-points {
+  flex-shrink: 0;
+  margin-left: var(--spacing-sm);
+  color: var(--color-ink-muted-80);
+  font-size: var(--text-body-strong);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ledger-points--credit {
+  color: var(--color-primary);
 }
 
 .category-row {

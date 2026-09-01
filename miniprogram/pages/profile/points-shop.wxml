@@ -9,11 +9,39 @@
     <view class="balance-copy">
       <view class="balance-label">当前积分</view>
       <view class="balance-value">{{pointsBalance}}</view>
-      <view class="balance-caption">积分账户将在下一阶段接入</view>
+      <view class="balance-caption" wx:if="{{pointsLoading}}">正在同步积分账户…</view>
+      <view class="balance-caption balance-caption--error" wx:elif="{{pointsError}}">同步失败，当前显示上次余额</view>
+      <view class="balance-caption" wx:else>每一笔积分变动都会记录在明细中</view>
     </view>
     <view class="balance-medal" aria-hidden="true">
       <view class="balance-medal-star">★</view>
     </view>
+  </view>
+
+  <view class="shop-section ledger-section">
+    <view class="section-heading">
+      <view>
+        <view class="section-title">积分明细</view>
+        <view class="section-description">记录积分获得与兑换情况</view>
+      </view>
+      <view class="section-count" wx:if="{{pointsEntries.length}}">{{pointsEntries.length}} 笔</view>
+    </view>
+
+    <view class="ledger-state" wx:if="{{pointsLoading}}">正在加载积分记录…</view>
+    <view class="ledger-state ledger-state--error" wx:elif="{{pointsError}}">
+      <view>{{pointsError}}</view>
+      <button class="retry-button" bindtap="retryPoints">重新加载</button>
+    </view>
+    <view class="ledger-list" wx:elif="{{pointsEntries.length}}">
+      <view class="ledger-row" wx:for="{{pointsEntries}}" wx:key="id">
+        <view class="ledger-copy">
+          <view class="ledger-title">{{item.title}}</view>
+          <view class="ledger-time">{{item.timeText}}</view>
+        </view>
+        <view class="ledger-points ledger-points--{{item.direction}}">{{item.pointsText}}</view>
+      </view>
+    </view>
+    <view class="ledger-state" wx:else>还没有积分记录，优质护耳贡献会显示在这里。</view>
   </view>
 
   <view class="shop-section">

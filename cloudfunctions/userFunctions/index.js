@@ -30,6 +30,7 @@ const MAX_SECONDS_PER_DAY = 86400
 const USAGE_SAMPLE_LIMIT = 300
 const DB_VALUE_FLOOR = 20
 const DB_VALUE_CEIL = 120
+const POINTS_LEDGER_LIMIT = 50
 
 async function ensureCollection(name) {
   try {
@@ -119,6 +120,7 @@ function toUserView(doc) {
     settings: normalizeSettings(doc.settings),
     testCount: doc.testCount || 0,
     usageSeconds: doc.usageSeconds || 0,
+    pointsBalance: Math.max(0, Math.round(Number(doc.pointsBalance) || 0)),
     createdAt: doc.createdAt || null,
     lastLoginAt: doc.lastLoginAt || null
   }
@@ -150,6 +152,7 @@ async function createUser(openid, profile, settings) {
     settings: normalizeSettings(settings),
     testCount: 0,
     usageSeconds: 0,
+    pointsBalance: 0,
     createdAt: now,
     lastLoginAt: now
   }
@@ -163,6 +166,7 @@ async function login(event) {
   await ensureCollection('test_records')
   await ensureCollection('user_favorites')
   await ensureCollection('usage_records')
+  await ensureCollection('points_ledger')
 
   const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { success: false, errMsg: 'missing openid' }
@@ -183,6 +187,7 @@ async function login(event) {
       settings: normalizeSettings(clientSettingsInput),
       testCount: 0,
       usageSeconds: 0,
+      pointsBalance: 0,
       createdAt: now,
       lastLoginAt: now
     }
@@ -477,6 +482,60 @@ async function listUsage(event) {
   return { success: true, data: res.data.map(r => ({ ...r, samples: r.samples || [] })) }
 }
 
+function toTimestamp(value) {
+  if (value instanceof Date) return value.getTime()
+  if (value && typeof value.getTime === 'function') return value.getTime()
+  const timestamp = new Date(value || 0).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+// 积分账户只允许当前用户读取。积分发放由后续受控业务流程写入，
+// 不提供客户端可直接传入 points 的接口，避免伪造请求刷分。
+async function getPointsSummary(event) {
+  await ensureCollection('users')
+  await ensureCollection('points_ledger')
+
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  let user = await getUserDocWithRetry(OPENID)
+  if (!user) user = await createUser(OPENID, {}, {})
+
+  const limit = Math.min(
+    POINTS_LEDGER_LIMIT,
+    Math.max(1, Math.round(Number(event.limit) || 20))
+  )
+  const loadLedger = () => db.collection('points_ledger')
+    .where({ openid: OPENID })
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get()
+  let ledgerRes
+  try {
+    ledgerRes = await loadLedger()
+  } catch (error) {
+    await new Promise(resolve => setTimeout(resolve, 300))
+    ledgerRes = await loadLedger()
+  }
+
+  const entries = ledgerRes.data.map(item => ({
+    id: item._id,
+    title: normalizeText(item.title, 40) || '积分变动',
+    points: Math.round(Number(item.points) || 0),
+    sourceType: normalizeText(item.sourceType, 40),
+    sourceId: normalizeText(item.sourceId, 100),
+    createdAt: toTimestamp(item.createdAt)
+  }))
+
+  return {
+    success: true,
+    data: {
+      balance: Math.max(0, Math.round(Number(user.pointsBalance) || 0)),
+      entries
+    }
+  }
+}
+
 // 云函数入口：按 event.type 分发，统一返回 { success, data }
 exports.main = async (event) => {
   try {
@@ -503,6 +562,8 @@ exports.main = async (event) => {
         return await saveUsage(event)
       case 'listUsage':
         return await listUsage(event)
+      case 'getPointsSummary':
+        return await getPointsSummary(event)
       default:
         return { success: false, errMsg: `unknown type: ${event.type}` }
     }

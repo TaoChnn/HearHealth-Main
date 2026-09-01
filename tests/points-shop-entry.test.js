@@ -5,6 +5,7 @@ const assert = require('node:assert/strict')
 
 const projectRoot = path.resolve(__dirname, '..')
 const shopRoute = 'pages/profile/points-shop'
+let shopPageDefinition
 
 test('积分商城页面已注册到小程序路由', () => {
   const appConfig = JSON.parse(
@@ -50,18 +51,109 @@ test('个人中心积分商城入口跳转到已注册页面', () => {
 })
 
 test('积分商城首期展示三种奖励分类和零积分占位余额', () => {
-  let shopPage
-
   global.Page = definition => {
-    shopPage = definition
+    shopPageDefinition = definition
   }
   require('../miniprogram/pages/profile/points-shop')
 
-  assert.equal(shopPage.data.pointsBalance, 0)
+  assert.equal(shopPageDefinition.data.pointsBalance, 0)
   assert.deepEqual(
-    shopPage.data.rewardCategories.map(item => item.id),
+    shopPageDefinition.data.rewardCategories.map(item => item.id),
     ['badges', 'coupons', 'souvenirs']
   )
 
   delete global.Page
+})
+
+test('积分商城从当前用户云端账户读取余额和流水', async () => {
+  const calls = []
+  const defaultSettings = {
+    reminderThreshold: 2,
+    healthReminder: true,
+    testReminder: true,
+    communityMessage: true
+  }
+
+  global.wx = {
+    getStorageSync() {
+      return null
+    },
+    setStorageSync() {},
+    cloud: {
+      callFunction({ data }) {
+        calls.push(data.type)
+        if (data.type === 'login') {
+          return Promise.resolve({
+            result: {
+              success: true,
+              data: {
+                user: {
+                  openid: 'test-openid',
+                  nickname: '测试用户',
+                  bio: '关注听力健康，从每天开始',
+                  avatar: '',
+                  deviceModel: '',
+                  profileUpdatedAt: 0,
+                  settings: defaultSettings,
+                  testCount: 0,
+                  usageSeconds: 0,
+                  pointsBalance: 125
+                }
+              }
+            }
+          })
+        }
+        if (data.type === 'listFavorites') {
+          return Promise.resolve({ result: { success: true, data: [] } })
+        }
+        if (data.type === 'getPointsSummary') {
+          return Promise.resolve({
+            result: {
+              success: true,
+              data: {
+                balance: 125,
+                entries: [{
+                  id: 'ledger-1',
+                  title: '护耳妙招被采纳',
+                  points: 100,
+                  createdAt: new Date(2026, 8, 1, 9, 30).getTime()
+                }]
+              }
+            }
+          })
+        }
+        throw new Error(`unexpected cloud call: ${data.type}`)
+      }
+    }
+  }
+
+  const page = {
+    ...shopPageDefinition,
+    data: JSON.parse(JSON.stringify(shopPageDefinition.data)),
+    setData(updates) {
+      Object.assign(this.data, updates)
+    }
+  }
+
+  await page.loadPointsSummary()
+
+  assert.equal(page.data.pointsBalance, 125)
+  assert.equal(page.data.pointsLoading, false)
+  assert.equal(page.data.pointsError, '')
+  assert.equal(page.data.pointsEntries[0].pointsText, '+100')
+  assert.equal(page.data.pointsEntries[0].direction, 'credit')
+  assert.equal(calls.includes('getPointsSummary'), true)
+
+  delete global.wx
+})
+
+test('云函数只开放积分查询，不开放客户端直接加积分', () => {
+  const source = fs.readFileSync(
+    path.join(projectRoot, 'cloudfunctions/userFunctions/index.js'),
+    'utf8'
+  )
+
+  assert.match(source, /case 'getPointsSummary'/)
+  assert.doesNotMatch(source, /case 'grantPoints'/)
+  assert.doesNotMatch(source, /case 'addPoints'/)
 })

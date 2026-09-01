@@ -1,6 +1,35 @@
+const { callUser, ensureLogin, isLoggedIn } = require('../../utils/auth')
+
+function formatEntryTime(timestamp) {
+  if (!Number(timestamp)) return '时间未知'
+  const date = new Date(Number(timestamp) || 0)
+  if (Number.isNaN(date.getTime())) return '时间未知'
+
+  const pad = value => String(value).padStart(2, '0')
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function normalizeEntries(input) {
+  if (!Array.isArray(input)) return []
+  return input.map((item, index) => {
+    const points = Math.round(Number(item && item.points) || 0)
+    return {
+      id: (item && item.id) || `entry-${index}`,
+      title: (item && item.title) || '积分变动',
+      points,
+      pointsText: `${points > 0 ? '+' : ''}${points}`,
+      direction: points >= 0 ? 'credit' : 'debit',
+      timeText: formatEntryTime(item && item.createdAt)
+    }
+  })
+}
+
 Page({
   data: {
     pointsBalance: 0,
+    pointsLoading: true,
+    pointsError: '',
+    pointsEntries: [],
     rewardCategories: [
       {
         id: 'badges',
@@ -21,5 +50,46 @@ Page({
         description: '兑换限定贴纸、徽章等纪念品'
       }
     ]
+  },
+
+  onShow() {
+    this.loadPointsSummary()
+  },
+
+  onPullDownRefresh() {
+    this.loadPointsSummary().then(() => {
+      if (typeof wx.stopPullDownRefresh === 'function') wx.stopPullDownRefresh()
+    })
+  },
+
+  async loadPointsSummary() {
+    if (this.pointsRequest) return this.pointsRequest
+
+    this.setData({ pointsLoading: true, pointsError: '' })
+    this.pointsRequest = (async () => {
+      try {
+        if (!isLoggedIn()) await ensureLogin()
+        const summary = await callUser('getPointsSummary', { limit: 20 })
+        this.setData({
+          pointsBalance: Math.max(0, Math.round(Number(summary && summary.balance) || 0)),
+          pointsEntries: normalizeEntries(summary && summary.entries),
+          pointsLoading: false,
+          pointsError: ''
+        })
+      } catch (error) {
+        this.setData({
+          pointsLoading: false,
+          pointsError: '积分账户暂时无法连接，请稍后重试'
+        })
+      } finally {
+        this.pointsRequest = null
+      }
+    })()
+
+    return this.pointsRequest
+  },
+
+  retryPoints() {
+    this.loadPointsSummary()
   }
 })
