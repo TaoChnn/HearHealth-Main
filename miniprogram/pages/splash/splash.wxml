@@ -24,6 +24,7 @@
 
   <!-- 操作区 -->
   <view class="splash-actions">
+    <view class="splash-hint">首次使用，登录后可云端同步您的健康数据</view>
     <button
       class="splash-login-btn {{loggingIn ? 'splash-login-btn--loading' : ''}}"
       bindtap="onLoginTap"

@@ -115,6 +115,10 @@
   box-sizing: border-box;
 }
 
+.stat-item--pressed {
+  background: var(--color-surface-pearl);
+}
+
 .stat-item--divided::after {
   position: absolute;
   top: var(--spacing-md);

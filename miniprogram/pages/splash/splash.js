@@ -1,6 +1,6 @@
 // 开屏页 —— 微信授权登录入口
-// 已登录（本地有会话）直接进首页；未登录先自动静默登录一次，
-// 失败时停留本页展示一键登录按钮，由用户手动重试或跳过。
+// 已登录（本地有会话）直接进首页；首次未登录停留在本页，
+// 由用户点击一键登录进入，或跳过以游客身份浏览。
 const { ensureLogin, isLoggedIn } = require('../../utils/auth')
 
 // 开屏最小展示时长（毫秒）：保证品牌画面可被看清，再进入首页
@@ -17,35 +17,27 @@ Page({
     this.loadedAt = Date.now()
     if (isLoggedIn()) {
       this.enterApp()
-      return
     }
-    // 未登录：开屏自动尝试一次静默登录，失败则展示手动登录按钮
-    this.performLogin(false)
+    // 未登录：停留本页展示一键登录按钮，由用户手动登录或跳过
   },
 
-  performLogin(manual) {
+  performLogin() {
     if (this.data.loggingIn || this.hasNavigated) return
-    if (manual) {
-      this.setData({ loggingIn: true, errorMsg: '' })
-    }
+    this.setData({ loggingIn: true, errorMsg: '' })
 
     ensureLogin()
       .then(() => {
-        // 手动登录时给一个成功反馈再进入，静默登录直接进
-        if (manual) {
-          wx.showToast({ title: '登录成功', icon: 'success', duration: 600 })
-        }
-        this.enterApp()
+        // 手动登录：先给一个成功反馈，再进入首页
+        wx.showToast({ title: '登录成功', icon: 'success', duration: 600 })
+        setTimeout(() => this.enterApp(), 400)
       })
       .catch(error => {
         console.error('[splash] 登录失败：', error)
         const detail = (error && error.message) || '网络异常，请稍后重试'
-        this.setData({
-          errorMsg: manual ? `登录失败：${detail}` : '自动登录未成功，可点击下方按钮重试'
-        })
+        this.setData({ errorMsg: `登录失败：${detail}` })
       })
       .finally(() => {
-        if (manual) this.setData({ loggingIn: false })
+        this.setData({ loggingIn: false })
       })
   },
 
@@ -61,7 +53,7 @@ Page({
   },
 
   onLoginTap() {
-    this.performLogin(true)
+    this.performLogin()
   },
 
   onSkipTap() {

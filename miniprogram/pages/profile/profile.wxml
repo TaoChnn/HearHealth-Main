@@ -21,6 +21,10 @@
         class="stat-item {{index < stats.length - 1 ? 'stat-item--divided' : ''}}"
         wx:for="{{stats}}"
         wx:key="label"
+        data-target="{{item.target}}"
+        bindtap="onStatTap"
+        hover-class="stat-item--pressed"
+        hover-stay-time="80"
       >
         <text class="stat-value">{{item.value}}</text>
         <text class="stat-label">{{item.label}}</text>

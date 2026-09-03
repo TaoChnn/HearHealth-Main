@@ -5,6 +5,7 @@
 // 本地镜像保留每天的秒数与音量聚合（供任意周期图表离线渲染），
 // 采样明细只保留最近若干天以控制 storage 体积。
 const { callUser } = require('./auth')
+const { isLoggedOut } = require('./local-data')
 
 const STORAGE_KEY = 'hearHealthUsage'
 const PENDING_KEY = 'hearHealthUsagePending'
@@ -206,11 +207,35 @@ function nextSample(now) {
   return { t: now, hp: lastHp, env: lastEnv }
 }
 
+// 主动退出登录/注销账号后不再累计：saveUsage 是以 OPENID 归属数据的，
+// 继续上报会把登出期间的时长重新算进该账号，注销后甚至会重新建出 usage_records（issue #35）。
+// 游客（从未登录）不受影响，仍照常累计，登录后一并归属，与原有行为一致。
+function shouldTrack() {
+  return !isLoggedOut()
+}
+
+// 丢弃未上报的增量：它已无法归属到任何账号，留着只会在下次登录时被错算
+function discardPending() {
+  if (!hasBucketData(inFlightBucket) && !hasBucketData(pending)) return
+  pending = emptyBucket()
+  inFlightBucket = null
+  try {
+    wx.removeStorageSync(PENDING_KEY)
+  } catch (e) {
+    // 忽略清理失败
+  }
+}
+
 // 结算自上次心跳以来的前台秒数到待同步缓冲；跨天时先把旧一天的缓冲刷掉
 function accumulate(now) {
   const delta = Math.min(Math.max(now - lastTickAt, 0), MAX_TICK_MS)
   lastTickAt = now
   if (!delta) return
+
+  if (!shouldTrack()) {
+    discardPending()
+    return
+  }
 
   const todayKey = dateKeyOf(new Date(now))
   if (pending.dateKey && pending.dateKey !== todayKey) {
@@ -225,6 +250,11 @@ function accumulate(now) {
 // saveUsage 目前没有 requestId/eventId；若服务端成功但响应丢失，重试仍可能重复累加。
 // 严格 exactly-once 需要未来由接口增加幂等标识，本轮不改变数据库结构。
 function flushPending() {
+  if (!shouldTrack()) {
+    discardPending()
+    return Promise.resolve()
+  }
+
   if (flushPromise) {
     flushRequested = true
     return flushPromise
@@ -283,6 +313,13 @@ function flushPending() {
 
 function onSamplerTick() {
   const now = Date.now()
+  // 已退出登录：只推进计时基准并丢掉未上报的增量，不再采样
+  if (!shouldTrack()) {
+    lastTickAt = now
+    discardPending()
+    return
+  }
+
   accumulate(now)
   pending.samples.push(nextSample(now))
   savePending()

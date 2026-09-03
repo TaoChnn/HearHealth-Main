@@ -1,6 +1,6 @@
 const { callCommunity } = require('../community/util')
 const { DEFAULT_BIO, getUserProfile } = require('../../utils/user-profile')
-const { ensureLogin, getSession, isLoggedIn } = require('../../utils/auth')
+const { ensureLogin, getSession, isLoggedIn, isLoggedOut } = require('../../utils/auth')
 const initialUserProfile = getUserProfile()
 const initialUser = (getSession() || {}).user || {}
 
@@ -17,9 +17,9 @@ Page({
     defaultBio: DEFAULT_BIO,
     userProfile: initialUserProfile,
     stats: [
-      { value: formatTotalUsage(initialUser.usageSeconds), label: '累计用耳' },
-      { value: String(initialUser.testCount || 0), label: '测试次数' },
-      { value: '4', label: '发帖数' }
+      { value: formatTotalUsage(initialUser.usageSeconds), label: '累计用耳', target: 'usage-stats' },
+      { value: String(initialUser.testCount || 0), label: '测试次数', target: 'test-history' },
+      { value: '4', label: '发帖数', target: 'my-posts' }
     ],
     menuGroups: [
       {
@@ -71,14 +71,16 @@ Page({
     }
     this.loadUserProfile()
     this.loadPostCount()
-    // 登录后用云端档案刷新测试次数；未登录时补一次静默登录（失败不打扰）
-    if (!isLoggedIn()) {
-      ensureLogin()
-        .then(() => this.applySession())
-        .catch(() => {})
-    } else {
+    // 登录后用云端档案刷新测试次数；
+    // 游客（未登录且未主动退出过）补一次静默登录，失败不打扰；
+    // 主动退出登录后保持登出态，不再自动登回来，否则「退出登录」会失效（issue #35）
+    if (isLoggedIn() || isLoggedOut()) {
       this.applySession()
+      return
     }
+    ensureLogin()
+      .then(() => this.applySession())
+      .catch(() => {})
   },
 
   loadUserProfile() {
@@ -114,6 +116,18 @@ Page({
     if (!url) return
 
     wx.navigateTo({ url })
+  },
+
+  // 统计卡三个数据各自可点：累计用耳 → 统计页（tab 页需 switchTab），其余为普通页面跳转
+  onStatTap(e) {
+    const { target } = e.currentTarget.dataset
+    if (!target) return
+
+    if (target === 'usage-stats') {
+      wx.switchTab({ url: '/pages/stats/stats' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/profile/${target}` })
   },
 
   onEditProfile() {

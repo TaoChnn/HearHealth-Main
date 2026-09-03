@@ -536,6 +536,41 @@ async function getPointsSummary(event) {
   }
 }
 
+// 注销账号：删除该 OPENID 名下的全部云端数据，操作不可逆。
+// 只处理本账号的私有数据（users / usage_records / test_records / user_favorites / points_ledger）；
+// 社区帖子属于公开内容且带有他人的点赞与评论，不在这里连带删除，需要脱敏时另行处理。
+// 每次最多取 100 条循环删除，避免单次批量删除超限；集合不存在时视为已清空。
+async function removeAllByOpenid(name, openid) {
+  let removed = 0
+  for (;;) {
+    let res
+    try {
+      res = await db.collection(name).where({ openid }).limit(100).get()
+    } catch (e) {
+      return removed
+    }
+    if (!res.data.length) return removed
+    await Promise.all(res.data.map(doc =>
+      db.collection(name).doc(doc._id).remove().catch(() => {})
+    ))
+    removed += res.data.length
+    if (res.data.length < 100) return removed
+  }
+}
+
+async function deleteAccount() {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  const removed = {}
+  const collections = ['usage_records', 'test_records', 'user_favorites', 'points_ledger', 'users']
+  for (const name of collections) {
+    removed[name] = await removeAllByOpenid(name, OPENID)
+  }
+
+  return { success: true, data: { openid: OPENID, removed } }
+}
+
 // 云函数入口：按 event.type 分发，统一返回 { success, data }
 exports.main = async (event) => {
   try {
@@ -564,6 +599,8 @@ exports.main = async (event) => {
         return await listUsage(event)
       case 'getPointsSummary':
         return await getPointsSummary(event)
+      case 'deleteAccount':
+        return await deleteAccount()
       default:
         return { success: false, errMsg: `unknown type: ${event.type}` }
     }

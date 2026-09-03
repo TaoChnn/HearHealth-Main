@@ -1,4 +1,6 @@
 const LATEST_TEST_RESULT_KEY = 'latestHearingTestResult'
+// 测试历史页查看某条旧记录时，会把完整结果暂存在这个 key（见 pages/profile/test-history.js）
+const HISTORY_TEST_RESULT_KEY = 'historyHearingTestResult'
 const COMMUNITY_SHARE_DRAFT_KEY = 'hearingReportShareDraft'
 const AI_FIXED_DISCLAIMER = 'AI 解读仅用于听力健康教育和初步筛查结果解释，不构成医学诊断，也不能替代专业听力检查或医生建议。'
 const { callUser } = require('../../utils/auth')
@@ -32,6 +34,8 @@ Page({
     this.chartReady = false
     this.testRecordId = readTestRecordId(options && options.testRecordId)
     this.aiUnavailableReason = options && options.aiUnavailable
+    // from=history：来自测试历史页，渲染指定的历史记录而不是最新一条
+    this.fromHistory = Boolean(options && options.from === 'history')
     this.aiStarted = false
     this.loadLatestResult()
   },
@@ -46,6 +50,18 @@ Page({
   },
 
   loadLatestResult() {
+    // 历史模式：读取测试历史页暂存的指定记录；数据缺失时展示空态，不回退到最新记录
+    if (this.fromHistory) {
+      let record
+      try {
+        record = wx.getStorageSync(HISTORY_TEST_RESULT_KEY)
+      } catch (error) {
+        record = null
+      }
+      if (this.isValidResult(record)) this.renderResult(record)
+      return
+    }
+
     let result
     try {
       result = wx.getStorageSync(LATEST_TEST_RESULT_KEY)
