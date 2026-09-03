@@ -1,4 +1,4 @@
-const { callUser } = require('../../utils/auth')
+const { callUser, isLoggedIn } = require('../../utils/auth')
 const {
   RELATIVE_LEVELS,
   START_LEVEL_PERCENT,
@@ -775,6 +775,14 @@ Page({
     }
 
     this.reportOpening = true
+
+    // 游客模式：测试记录只落本机，不往云端写 OPENID 维度的数据，
+    // AI 解读依赖云端记录，登录后完成测试即可恢复（issue #36）
+    if (!isLoggedIn()) {
+      this.openReport('/pages/test/report?aiUnavailable=guest-mode')
+      return
+    }
+
     wx.showLoading({ title: '正在保存报告', mask: true })
 
     // AI 只接受云端 testRecordId；保存失败或超时仍进入基础报告，不让 AI 阻断原流程。

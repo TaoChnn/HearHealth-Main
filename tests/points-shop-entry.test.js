@@ -5,6 +5,9 @@ const assert = require('node:assert/strict')
 
 const projectRoot = path.resolve(__dirname, '..')
 const shopRoute = 'pages/profile/points-shop'
+const localData = require('../miniprogram/utils/local-data')
+const auth = require('../miniprogram/utils/auth')
+const { SESSION_KEY } = localData
 let shopPageDefinition
 
 test('积分商城页面已注册到小程序路由', () => {
@@ -67,6 +70,10 @@ test('积分商城首期展示三种奖励分类和零积分占位余额', () =>
 
 test('积分商城从当前用户云端账户读取余额和流水', async () => {
   const calls = []
+  const store = {
+    // issue #36：积分账户是云端账号数据，只有已登录（会话在本地）才会读取
+    [SESSION_KEY]: { user: { openid: 'test-openid' } }
+  }
   const defaultSettings = {
     reminderThreshold: 2,
     healthReminder: true,
@@ -75,10 +82,15 @@ test('积分商城从当前用户云端账户读取余额和流水', async () =>
   }
 
   global.wx = {
-    getStorageSync() {
-      return null
+    getStorageSync(key) {
+      return key in store ? store[key] : ''
     },
-    setStorageSync() {},
+    setStorageSync(key, value) {
+      store[key] = value
+    },
+    removeStorageSync(key) {
+      delete store[key]
+    },
     cloud: {
       callFunction({ data }) {
         calls.push(data.type)
@@ -140,9 +152,54 @@ test('积分商城从当前用户云端账户读取余额和流水', async () =>
   assert.equal(page.data.pointsBalance, 125)
   assert.equal(page.data.pointsLoading, false)
   assert.equal(page.data.pointsError, '')
+  assert.equal(page.data.needLogin, false)
   assert.equal(page.data.pointsEntries[0].pointsText, '+100')
   assert.equal(page.data.pointsEntries[0].direction, 'credit')
   assert.equal(calls.includes('getPointsSummary'), true)
+
+  delete global.wx
+})
+
+test('游客打开积分商城只展示登录引导，不触发登录建档', async () => {
+  const store = {}
+  const calls = []
+
+  global.wx = {
+    getStorageSync(key) {
+      return key in store ? store[key] : ''
+    },
+    setStorageSync(key, value) {
+      store[key] = value
+    },
+    removeStorageSync(key) {
+      delete store[key]
+    },
+    cloud: {
+      callFunction({ data }) {
+        calls.push(data.type)
+        return Promise.resolve({ result: { success: true, data: {} } })
+      }
+    }
+  }
+
+  // 清掉上一个用例留在 auth 模块里的会话缓存，回到游客态
+  auth.logout()
+  localData.clearLoggedOut()
+
+  const page = {
+    ...shopPageDefinition,
+    data: JSON.parse(JSON.stringify(shopPageDefinition.data)),
+    setData(updates) {
+      Object.assign(this.data, updates)
+    }
+  }
+
+  await page.loadPointsSummary()
+
+  assert.equal(page.data.needLogin, true)
+  assert.equal(page.data.pointsLoading, false)
+  assert.equal(page.data.pointsError, '')
+  assert.deepEqual(calls, [])
 
   delete global.wx
 })

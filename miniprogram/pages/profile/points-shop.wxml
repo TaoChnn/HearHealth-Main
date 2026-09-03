@@ -18,7 +18,15 @@
     </view>
   </view>
 
-  <view class="shop-section ledger-section">
+  <!-- 游客：积分属于云端账号数据，先引导登录而不是静默建档 -->
+  <view class="shop-section login-gate" wx:if="{{needLogin}}">
+    <view class="login-gate-symbol" aria-hidden="true">◈</view>
+    <view class="login-gate-title">登录后查看积分账户</view>
+    <view class="login-gate-description">积分余额与明细保存在你的云端账号中，登录后即可查看。</view>
+    <button class="login-gate-button" bindtap="onGoLogin">去登录</button>
+  </view>
+
+  <view class="shop-section ledger-section" wx:else>
     <view class="section-heading">
       <view>
         <view class="section-title">积分明细</view>

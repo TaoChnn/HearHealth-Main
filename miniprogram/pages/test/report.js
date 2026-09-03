@@ -110,12 +110,15 @@ Page({
     this.aiStarted = true
 
     if (!this.testRecordId) {
+      const reason = this.aiUnavailableReason
       this.setData({
         aiStatus: 'error',
         aiAnalysis: null,
-        aiErrorMessage: this.aiUnavailableReason === 'record-sync-failed'
+        aiErrorMessage: reason === 'record-sync-failed'
           ? '测试记录暂未同步到云端，暂时无法生成 AI 解读'
-          : '这份报告没有可用的云端记录标识，暂时无法生成 AI 解读',
+          : reason === 'guest-mode'
+            ? '游客模式下测试记录仅保存在本机，登录后完成测试即可生成 AI 解读'
+            : '这份报告没有可用的云端记录标识，暂时无法生成 AI 解读',
         aiCanRetry: false
       })
       return

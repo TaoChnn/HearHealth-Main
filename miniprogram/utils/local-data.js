@@ -8,7 +8,13 @@
 
 // 登录会话（utils/auth）
 const SESSION_KEY = 'hearHealthSession'
-// 用户是否主动退出过登录：用于区分「游客（可以后台补登录）」与
+// 登录授权记录（utils/auth）：用户是否在开屏页勾选同意《用户协议》与《隐私政策》。
+// 身份来自微信 OPENID，云函数拿到 OPENID 就能建档；只靠「有没有点按钮」约束不住
+// 各页面各自调用登录，所以把「已授权」落成一条本机记录，由 auth.login() 统一校验（issue #36）。
+const CONSENT_KEY = 'hearHealthLoginConsent'
+// 授权记录结构版本：协议内容变更时可据此要求用户重新确认
+const CONSENT_VERSION = 1
+// 用户是否主动退出过登录：用于区分「游客（可以主动补登录）」与
 // 「刚主动退出（不要再自动登回来，否则退出登录形同无效）」
 const LOGGED_OUT_KEY = 'hearHealthLoggedOut'
 
@@ -27,7 +33,8 @@ const SYNCED_KEYS = [
 const DEVICE_ONLY_KEYS = [
   'hearingReportShareDraft',     // 社区发帖草稿
   'hearHealthDailyRiskReminder', // 今日风险提醒弹窗是否已弹过
-  'communityNoticeClosed'        // 社区公告是否已关闭
+  'communityNoticeClosed',       // 社区公告是否已关闭
+  CONSENT_KEY                    // 登录授权记录：退出登录/注销后不再有效，需重新确认
 ]
 
 function readKey(key) {
@@ -81,14 +88,39 @@ function clearLoggedOut() {
   removeKeys([LOGGED_OUT_KEY])
 }
 
+// 读取授权记录：结构与版本不对时视为未授权，协议更新后会要求重新确认
+function readConsent() {
+  const stored = readKey(CONSENT_KEY)
+  if (!stored || typeof stored !== 'object') return null
+  const agreedAt = Number(stored.agreedAt) || 0
+  if (!agreedAt) return null
+  return { agreedAt, version: Number(stored.version) || 1 }
+}
+
+function hasConsent() {
+  return Boolean(readConsent())
+}
+
+function grantConsent() {
+  writeKey(CONSENT_KEY, { agreedAt: Date.now(), version: CONSENT_VERSION })
+}
+
+function revokeConsent() {
+  removeKeys([CONSENT_KEY])
+}
+
 module.exports = {
   SESSION_KEY,
   LOGGED_OUT_KEY,
+  CONSENT_KEY,
   SYNCED_KEYS,
   DEVICE_ONLY_KEYS,
   clearCache,
   clearAccountData,
   isLoggedOut,
   markLoggedOut,
-  clearLoggedOut
+  clearLoggedOut,
+  hasConsent,
+  grantConsent,
+  revokeConsent
 }

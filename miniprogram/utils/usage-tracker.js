@@ -4,7 +4,7 @@
 // 每 60s 及切后台时异步同步到 usage_records（每用户每天一条）。
 // 本地镜像保留每天的秒数与音量聚合（供任意周期图表离线渲染），
 // 采样明细只保留最近若干天以控制 storage 体积。
-const { callUser } = require('./auth')
+const { callUser, isLoggedIn } = require('./auth')
 const { isLoggedOut } = require('./local-data')
 
 const STORAGE_KEY = 'hearHealthUsage'
@@ -207,9 +207,16 @@ function nextSample(now) {
   return { t: now, hp: lastHp, env: lastEnv }
 }
 
+// 是否允许与云端交互（上报/拉取）：只在已登录时进行。
+// saveUsage/listUsage 都是 OPENID 维度的云端读写，游客阶段照发请求就会在用户
+// 未做任何同意的情况下于云端留下个人记录（issue #36），所以游客期间数据只落本机。
+function canSyncToCloud() {
+  return isLoggedIn() && !isLoggedOut()
+}
+
 // 主动退出登录/注销账号后不再累计：saveUsage 是以 OPENID 归属数据的，
 // 继续上报会把登出期间的时长重新算进该账号，注销后甚至会重新建出 usage_records（issue #35）。
-// 游客（从未登录）不受影响，仍照常累计，登录后一并归属，与原有行为一致。
+// 游客照常累计（留在本机），登录后随同步周期一并上报。
 function shouldTrack() {
   return !isLoggedOut()
 }
@@ -252,6 +259,12 @@ function accumulate(now) {
 function flushPending() {
   if (!shouldTrack()) {
     discardPending()
+    return Promise.resolve()
+  }
+
+  // 游客：增量留在本机缓冲，登录后的下一个同步周期会自动补报
+  if (!canSyncToCloud()) {
+    savePending()
     return Promise.resolve()
   }
 
@@ -406,7 +419,12 @@ function getDays(fromDate, toDate) {
 
 // 云端拉取区间记录并覆盖本地的“已确认镜像”；getDays 再叠加未同步增量。
 // 若已有 flush，先等它完成，避免 listUsage 与增量确认交错造成瞬时重复显示。
+// 未登录（游客/已退出）时不读云端：本机镜像 + 未同步增量已是全部可见数据（issue #36）。
 function refreshRange(fromDate, toDate) {
+  if (!canSyncToCloud()) {
+    return Promise.resolve(getDays(fromDate, toDate))
+  }
+
   const waitForFlush = flushPromise
     ? flushPromise.catch(() => null)
     : Promise.resolve()

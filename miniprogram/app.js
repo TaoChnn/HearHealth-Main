@@ -1,5 +1,5 @@
 // app.js
-const { ensureLogin, isLoggedIn } = require("./utils/auth");
+const { ensureLogin, grantConsent, hasConsent, isLoggedIn } = require("./utils/auth");
 const usageTracker = require("./utils/usage-tracker");
 
 App({
@@ -19,8 +19,10 @@ App({
       traceUser: true,
     });
     // 已有会话：启动时静默同步云端档案（建档/合并资料），失败不阻塞启动；
-    // 未登录：不在后台偷偷建档，首次登录交由开屏页引导用户手动完成
+    // 未登录：不在后台偷偷建档，首次登录交由开屏页引导用户手动完成（issue #36）
     if (isLoggedIn()) {
+      // 授权记录是后加的老用户没有这条记录，已有会话视为当初已同意，避免被判成未授权
+      if (!hasConsent()) grantConsent();
       ensureLogin().catch(() => {});
     }
   },

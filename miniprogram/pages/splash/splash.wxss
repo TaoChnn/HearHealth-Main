@@ -206,6 +206,54 @@
   opacity: 0.75;
 }
 
+/* 协议勾选：默认未勾选，勾选后才允许登录建档 */
+.splash-agreement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-xxs) var(--spacing-sm);
+}
+
+.splash-checkbox {
+  position: relative;
+  flex-shrink: 0;
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 12rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.splash-checkbox--checked {
+  border-color: #ffffff;
+  background: #ffffff;
+}
+
+.splash-checkbox--checked::after {
+  position: absolute;
+  top: 5rpx;
+  left: 9rpx;
+  width: 8rpx;
+  height: 15rpx;
+  border-right: 3rpx solid #0066cc;
+  border-bottom: 3rpx solid #0066cc;
+  transform: rotate(40deg);
+  content: "";
+}
+
+.splash-agreement-text {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+.splash-link {
+  color: rgba(255, 255, 255, 0.95);
+  text-decoration: underline;
+}
+
 .splash-error {
   margin-top: var(--spacing-sm);
   padding: var(--spacing-xxs) var(--spacing-sm);
@@ -227,4 +275,11 @@
 
 .splash-skip--pressed {
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* 已登录用户的进入提示 */
+.splash-entering {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: var(--text-body);
+  letter-spacing: 2rpx;
 }

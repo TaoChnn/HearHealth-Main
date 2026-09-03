@@ -1,4 +1,7 @@
-const { callUser, ensureLogin, isLoggedIn } = require('../../utils/auth')
+const { callUser, isLoggedIn } = require('../../utils/auth')
+
+// 积分属于账号数据：游客先走登录入口，不在本页静默建档（issue #36）
+const LOGIN_URL = '/pages/splash/splash?redirect=/pages/profile/points-shop'
 
 function formatEntryTime(timestamp) {
   if (!Number(timestamp)) return '时间未知'
@@ -30,6 +33,7 @@ Page({
     pointsLoading: true,
     pointsError: '',
     pointsEntries: [],
+    needLogin: false,
     rewardCategories: [
       {
         id: 'badges',
@@ -68,7 +72,19 @@ Page({
     this.setData({ pointsLoading: true, pointsError: '' })
     this.pointsRequest = (async () => {
       try {
-        if (!isLoggedIn()) await ensureLogin()
+        // 未登录不触发登录/建档：积分账户在云端，游客只看到登录引导（issue #36）
+        if (!isLoggedIn()) {
+          this.setData({
+            pointsLoading: false,
+            pointsError: '',
+            needLogin: true,
+            pointsBalance: 0,
+            pointsEntries: []
+          })
+          return
+        }
+
+        this.setData({ needLogin: false })
         const summary = await callUser('getPointsSummary', { limit: 20 })
         this.setData({
           pointsBalance: Math.max(0, Math.round(Number(summary && summary.balance) || 0)),
@@ -91,5 +107,9 @@ Page({
 
   retryPoints() {
     this.loadPointsSummary()
+  },
+
+  onGoLogin() {
+    wx.navigateTo({ url: LOGIN_URL })
   }
 })

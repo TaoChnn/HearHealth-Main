@@ -140,6 +140,7 @@ test('未退出登录时切后台仍会正常上报用耳时长', async () => {
   localData.clearLoggedOut()
   const todayKey = usageTracker.dateKeyOffset(0)
   const store = {
+    [SESSION_KEY]: { user: { openid: 'openid-1' } },
     hearHealthUsagePending: { dateKey: todayKey, seconds: 120, samples: [] }
   }
   const calls = trackCalls(store, () => ({ seconds: 120 }))
