@@ -108,20 +108,21 @@
   word-break: break-all;
 }
 
-/* 帖子图片（多张纵向排列，点击可预览） */
+/* 帖子图片：固定尺寸方图预览，圆角裁切 + 轻阴影，横向排布、点击可看大图
+   （3 张 200rpx + 间距 16rpx = 632rpx，恰好一行放下） */
 .post-images {
   margin-top: 24rpx;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .post-image {
-  width: 100%;
-  border-radius: 11rpx;
+  width: 200rpx;
+  height: 200rpx;
+  margin: 0 16rpx 16rpx 0;
+  border-radius: 16rpx;
   background: #f0f0f0;
-  display: block;
-}
-
-.post-image + .post-image {
-  margin-top: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
 /* 互动按钮 */

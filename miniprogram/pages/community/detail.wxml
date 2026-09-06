@@ -30,7 +30,7 @@
         wx:for="{{post.displayImages}}"
         wx:key="*this"
         src="{{item}}"
-        mode="widthFix"
+        mode="aspectFill"
         data-src="{{item}}"
         bindtap="onPreviewImage"
       ></image>

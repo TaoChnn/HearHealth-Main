@@ -40,7 +40,7 @@
       <text class="notice-close" bindtap="onCloseNotice">×</text>
     </view>
 
-    <!-- 帖子流（无卡片，细分隔线，参考 Twitter 扁平样式：单一字号正文） -->
+    <!-- 帖子流（白色圆角小卡片，参考详情页卡片样式：单一字号正文） -->
     <view class="post-list" wx:if="{{postList.length}}">
       <view class="post-item" wx:for="{{postList}}" wx:key="_id" bindtap="onTapPost" data-id="{{item._id}}">
         <image class="post-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
@@ -56,7 +56,7 @@
           <view class="post-content" wx:if="{{item.content}}">{{item.content}}</view>
 
           <view class="post-thumb" wx:if="{{item.cover}}">
-            <image class="post-thumb-img" src="{{item.cover}}" mode="widthFix"></image>
+            <image class="post-thumb-img" src="{{item.cover}}" mode="aspectFill"></image>
           </view>
 
           <view class="post-stats">
