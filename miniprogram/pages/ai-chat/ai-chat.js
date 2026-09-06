@@ -47,6 +47,22 @@ const APPLIED_STATE_TEXT = {
   'undo-failed': '撤销失败'
 }
 
+// 历史会话本地存储：按会话留档，超量滚动淘汰；恢复时待确认动作会失效，只还原正文与溯源
+const CHAT_HISTORY_KEY = 'hearHealthAiChatSessions'
+const CHAT_HISTORY_LIMIT = 30
+const CHAT_MESSAGES_LIMIT = 200
+
+function formatSessionTime(ts) {
+  const date = new Date(ts)
+  const now = new Date()
+  const pad = n => (n < 10 ? `0${n}` : `${n}`)
+  const hm = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  if (date.toDateString() === now.toDateString()) return `今天 ${hm}`
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return `昨天 ${hm}`
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${hm}`
+}
+
 Page({
   data: {
     messages: [],
@@ -57,6 +73,8 @@ Page({
     errorMessage: '',
     modeHint: '',
     scrollTarget: '',
+    historyVisible: false,
+    historySessions: [],
     actionStateText: ACTION_STATE_TEXT,
     appliedStateText: APPLIED_STATE_TEXT,
     suggestions: [
@@ -73,11 +91,18 @@ Page({
     // 待确认动作对应的请求上下文，按下标无关的消息 id 存放，页面重载后对话本身也不保留
     this.pendingPayloads = {}
     this.typewriter = null
+    this.sessionId = `s-${Date.now()}`
+    this.requestSeq = 0
+  },
+
+  onHide() {
+    this.saveCurrentSession()
   },
 
   onUnload() {
     this.pageActive = false
     this.stopTypewriter(false)
+    this.saveCurrentSession()
   },
 
   // 逐字渲染。wx.cloud.callFunction 不支持流式返回，云函数只能把完整结果一次性传回来，
@@ -184,13 +209,19 @@ Page({
     this.requestAssistant(context.messages, context.confirm, context.confirmIndex)
   },
 
+  // 新对话/恢复历史后，在途回复作废：结果回来时不再写进当前线程
+  invalidateRequest() {
+    this.requestSeq = (this.requestSeq || 0) + 1
+  },
+
   requestAssistant(messages, confirm, confirmIndex) {
+    const seq = (this.requestSeq = (this.requestSeq || 0) + 1)
     this.retryContext = { messages, confirm, confirmIndex }
     const payload = this.toPayload(messages)
 
     agentChat(payload, confirm)
       .then(result => {
-        if (!this.pageActive) return
+        if (!this.pageActive || seq !== this.requestSeq) return
         const reply = result && typeof result.reply === 'string' ? result.reply.trim() : ''
         const pending = result && result.pendingAction ? result.pendingAction : null
         const applied = result && result.appliedAction ? result.appliedAction : null
@@ -204,7 +235,7 @@ Page({
         this.appendAssistantReply(reply, { sources, pending, applied }, payload, confirmIndex)
       })
       .catch(error => {
-        if (!this.pageActive) return
+        if (!this.pageActive || seq !== this.requestSeq) return
 
         // 确认阶段失败不能降级：降级会弄丢待写入的动作，只能把卡片退回让用户重试或取消
         if (confirm) {
@@ -218,7 +249,7 @@ Page({
         }
 
         // 普通提问失败时降级为基础问答：用户至少还能得到回答，横幅会如实说明读不到档案
-        this.requestPlainFallback(messages, error)
+        this.requestPlainFallback(messages, error, seq)
       })
   },
 
@@ -265,7 +296,7 @@ Page({
 
   // Agent 链路失败时的兜底：退回改造前的普通问答。
   // 这样云函数没重新上传、模型暂时不可用等情况下，聊天功能不会整体瘫痪
-  requestPlainFallback(messages, cause) {
+  requestPlainFallback(messages, cause, seq) {
     console.warn('[ai-chat] agent 请求失败，降级为基础问答', {
       code: cause && cause.code,
       message: cause && cause.message
@@ -273,14 +304,14 @@ Page({
 
     chatHearingHealth(this.toPayload(messages))
       .then(result => {
-        if (!this.pageActive) return
+        if (!this.pageActive || seq !== this.requestSeq) return
         const reply = result && typeof result.reply === 'string' ? result.reply.trim() : ''
         if (!reply) throw new Error('empty assistant reply')
         this.setData({ modeHint: BASIC_FALLBACK_HINT })
         this.appendAssistantReply(reply, { sources: [], pending: null, applied: null }, null, null)
       })
       .catch(() => {
-        if (!this.pageActive) return
+        if (!this.pageActive || seq !== this.requestSeq) return
         this.setData({
           loading: false,
           errorMessage: resolveErrorMessage(cause),
@@ -342,6 +373,137 @@ Page({
         this.setData({ [`messages[${index}].appliedAction.state`]: 'undo-failed' })
         wx.showToast({ title: '撤销失败，请到档案里手动删除', icon: 'none' })
       })
+  },
+
+  // ===== 历史会话 =====
+  // 只还原正文、溯源与已完成的动作卡；待确认的提议离开页面即失效，恢复后不出现确认按钮
+  readSessions() {
+    try {
+      const stored = wx.getStorageSync(CHAT_HISTORY_KEY)
+      return Array.isArray(stored) ? stored : []
+    } catch (error) {
+      return []
+    }
+  },
+
+  writeSessions(sessions) {
+    try {
+      wx.setStorageSync(CHAT_HISTORY_KEY, sessions.slice(0, CHAT_HISTORY_LIMIT))
+    } catch (error) {
+      // 存储失败（空间不足等）不影响当前聊天
+    }
+  },
+
+  saveCurrentSession() {
+    const messages = (this.data.messages || [])
+      .filter(item => (
+        item && (item.content || item.appliedAction ||
+          (item.pendingAction && item.pendingAction.state !== 'pending' && item.pendingAction.state !== 'confirming'))
+      ))
+      .map(item => ({
+        id: item.id,
+        role: item.role,
+        content: item.content || '',
+        sources: Array.isArray(item.sources) ? item.sources : [],
+        pendingAction: item.pendingAction || null,
+        appliedAction: item.appliedAction || null
+      }))
+    if (!messages.length) return
+
+    const firstUser = messages.find(item => item.role === 'user' && item.content)
+    const title = firstUser ? firstUser.content.slice(0, 20) : '新的对话'
+    const sessions = this.readSessions().filter(item => item.id !== this.sessionId)
+    sessions.unshift({
+      id: this.sessionId,
+      title,
+      updatedAt: Date.now(),
+      messages: messages.slice(-CHAT_MESSAGES_LIMIT)
+    })
+    this.writeSessions(sessions)
+  },
+
+  onNewChat() {
+    this.saveCurrentSession()
+    this.stopTypewriter(true)
+    this.invalidateRequest()
+    this.retryContext = null
+    this.pendingPayloads = {}
+    this.sessionId = `s-${Date.now()}`
+    this.setData({
+      messages: [],
+      inputValue: '',
+      loading: false,
+      errorMessage: '',
+      typing: false,
+      typingMessageId: '',
+      modeHint: '',
+      scrollTarget: ''
+    })
+  },
+
+  onOpenHistory() {
+    const sessions = this.readSessions().map(item => ({
+      ...item,
+      timeText: formatSessionTime(item.updatedAt),
+      count: (item.messages || []).length
+    }))
+    this.setData({ historyVisible: true, historySessions: sessions })
+  },
+
+  onCloseHistory() {
+    this.setData({ historyVisible: false })
+  },
+
+  onLoadSession(event) {
+    const id = event.currentTarget.dataset.id
+    const session = this.readSessions().find(item => item.id === id)
+    if (!session) return
+
+    // 先把手头这段存档，再切换到选中的历史会话
+    this.saveCurrentSession()
+    this.stopTypewriter(true)
+    this.invalidateRequest()
+    this.retryContext = null
+    this.pendingPayloads = {}
+    this.sessionId = session.id
+
+    const messages = (session.messages || []).map(item => ({
+      id: item.id,
+      role: item.role,
+      content: item.content || '',
+      sources: Array.isArray(item.sources) ? item.sources : [],
+      pendingAction: item.pendingAction || null,
+      appliedAction: item.appliedAction || null
+    }))
+
+    this.setData({
+      historyVisible: false,
+      messages,
+      inputValue: '',
+      loading: false,
+      errorMessage: '',
+      typing: false,
+      typingMessageId: '',
+      modeHint: '',
+      scrollTarget: 'chat-bottom'
+    })
+  },
+
+  onDeleteSession(event) {
+    const id = event.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除这条对话？',
+      content: '删除后无法恢复',
+      confirmText: '删除',
+      confirmColor: '#b42318',
+      success: res => {
+        if (!res.confirm) return
+        this.writeSessions(this.readSessions().filter(item => item.id !== id))
+        // 删的是当前线程时换新 id，之后的对话会另存为新记录
+        if (id === this.sessionId) this.sessionId = `s-${Date.now()}`
+        this.onOpenHistory()
+      }
+    })
   },
 
   onOpenArchive() {

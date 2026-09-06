@@ -12,13 +12,31 @@ page {
 }
 
 .message-ai-mark {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--color-primary);
-  background: #eef6ff;
-  font-weight: 700;
+  width: 56rpx;
+  height: 56rpx;
+  margin-right: 14rpx;
+  border-radius: 50%;
+  background-image: linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8);
+  box-shadow: 0 4rpx 10rpx rgba(80, 80, 180, 0.22);
+}
+
+/* 迷你 bot 眼睛：与首页 bot 球同一形象 */
+.ai-mark-eyes {
+  display: flex;
+  gap: 8rpx;
+  transform: rotate(22deg) translateY(-2rpx);
+}
+
+.ai-mark-eyes view {
+  width: 5rpx;
+  height: 13rpx;
+  border-radius: 3rpx;
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .chat-scroll {
@@ -43,68 +61,113 @@ page {
   line-height: 1.4;
 }
 
-.welcome-card {
-  padding: 34rpx;
-  background: var(--color-canvas);
-  border: 2rpx solid var(--color-divider-soft);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.04);
+/* ===== 空状态欢迎页：bot 居中出场，直接铺在羊皮纸底上 ===== */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 88rpx;
+}
+
+.welcome-bot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 50%;
+  background-image:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 45%),
+    linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8);
+  box-shadow:
+    inset 0 2rpx 6rpx rgba(255, 255, 255, 0.45),
+    inset 0 -8rpx 14rpx rgba(40, 40, 80, 0.28),
+    0 10rpx 24rpx rgba(40, 28, 100, 0.22);
+}
+
+.welcome-bot-eyes {
+  display: flex;
+  gap: 12rpx;
+  transform: rotate(22deg) translateY(-4rpx);
+}
+
+.welcome-bot-eyes view {
+  width: 10rpx;
+  height: 28rpx;
+  border-radius: 6rpx;
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .welcome-title {
-  font-size: 36rpx;
-  font-weight: 650;
+  margin-top: 36rpx;
+  font-size: 38rpx;
+  font-weight: 700;
+  color: var(--color-ink);
   line-height: 1.3;
 }
 
 .welcome-text {
-  margin-top: 14rpx;
+  margin-top: 16rpx;
   color: var(--color-ink-muted-48);
-  font-size: 28rpx;
-  line-height: 1.55;
+  font-size: 26rpx;
+  line-height: 1.7;
+  text-align: center;
 }
 
 .archive-entry {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 24rpx;
-  padding: 20rpx 22rpx;
-  background: #f8fbff;
-  border: 2rpx solid #dceafb;
-  border-radius: var(--radius-md);
+  gap: 10rpx;
+  margin-top: 40rpx;
+  padding: 16rpx 30rpx;
+  background: var(--color-canvas);
+  border: 2rpx solid var(--color-divider-soft);
+  border-radius: var(--radius-pill);
 }
 
 .archive-entry--pressed {
-  background: #eef6ff;
+  background: var(--color-surface-pearl);
 }
 
 .archive-entry-text {
   color: var(--color-primary);
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
 }
 
 .archive-entry-arrow {
   flex-shrink: 0;
-  width: 24rpx;
-  height: 24rpx;
-  opacity: 0.6;
+  width: 22rpx;
+  height: 22rpx;
+  opacity: 0.55;
+}
+
+.suggestion-block {
+  width: 100%;
+  margin-top: 64rpx;
+}
+
+.suggestion-label {
+  color: var(--color-ink-muted-48);
+  font-size: 22rpx;
+  letter-spacing: 2rpx;
+  text-align: center;
 }
 
 .suggestion-list {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 16rpx;
-  margin-top: 28rpx;
+  margin-top: 22rpx;
 }
 
 .suggestion-chip {
   box-sizing: border-box;
-  padding: 16rpx 22rpx;
-  color: var(--color-primary);
-  background: #f4f8fd;
-  border: 2rpx solid #dceafb;
+  padding: 15rpx 26rpx;
+  color: var(--color-ink-muted-80);
+  background: var(--color-canvas);
+  border: 2rpx solid var(--color-divider-soft);
   border-radius: var(--radius-pill);
   font-size: 26rpx;
   line-height: 1.35;
@@ -122,14 +185,6 @@ page {
 
 .message-row--assistant {
   justify-content: flex-start;
-}
-
-.message-ai-mark {
-  width: 52rpx;
-  height: 52rpx;
-  margin-right: 14rpx;
-  border-radius: 16rpx;
-  font-size: 20rpx;
 }
 
 /* 助手侧的气泡、溯源标签与动作卡片共用一个纵向容器，宽度由容器统一收敛 */
@@ -164,8 +219,8 @@ page {
 .message-bubble--assistant {
   color: var(--color-ink);
   background: var(--color-canvas);
-  border: 2rpx solid var(--color-divider-soft);
   border-bottom-left-radius: 8rpx;
+  box-shadow: 0 2rpx 12rpx rgba(31, 41, 92, 0.05);
   line-height: 1.65;
 }
 
@@ -363,17 +418,159 @@ page {
 
 .chat-footer {
   flex-shrink: 0;
-  padding: 14rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding: 16rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
   background: rgba(250, 250, 252, 0.96);
   border-top: 2rpx solid var(--color-divider-soft);
 }
 
+/* 免责声明收成一行脚注，放在输入框下方，不再挤压版面 */
 .chat-disclaimer {
-  margin-bottom: 10rpx;
+  margin-top: 12rpx;
   color: var(--color-ink-muted-48);
   font-size: 20rpx;
-  line-height: 1.35;
+  line-height: 1.4;
   text-align: center;
+}
+
+/* ===== 会话工具条与历史抽屉 ===== */
+.chat-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14rpx;
+  flex-shrink: 0;
+  padding: 16rpx 24rpx 0;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 24rpx;
+  color: var(--color-ink-muted-80);
+  background: var(--color-canvas);
+  border: 2rpx solid var(--color-divider-soft);
+  border-radius: var(--radius-pill);
+  font-size: 24rpx;
+}
+
+.toolbar-icon {
+  width: 26rpx;
+  height: 26rpx;
+}
+
+.toolbar-btn--pressed {
+  background: var(--color-surface-pearl);
+}
+
+.history-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: rgba(20, 20, 40, 0.4);
+}
+
+.history-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  background: var(--color-canvas);
+  border-radius: 32rpx 32rpx 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: history-rise 0.25s ease-out;
+}
+
+@keyframes history-rise {
+  from { transform: translateY(30%); opacity: 0.5; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 30rpx 18rpx;
+}
+
+.history-title {
+  color: var(--color-ink);
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.history-close {
+  padding: 6rpx 10rpx;
+  color: var(--color-primary);
+  font-size: 26rpx;
+}
+
+.history-close--pressed {
+  opacity: 0.6;
+}
+
+.history-list {
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 0 24rpx;
+}
+
+.history-empty {
+  padding: 60rpx 0;
+  color: var(--color-ink-muted-48);
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 14rpx;
+  padding: 24rpx 22rpx;
+  background: var(--color-canvas-parchment);
+  border: 2rpx solid var(--color-divider-soft);
+  border-radius: var(--radius-md);
+}
+
+.history-item--pressed {
+  background: var(--color-surface-pearl);
+}
+
+.history-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-title {
+  color: var(--color-ink);
+  font-size: 27rpx;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-meta {
+  margin-top: 6rpx;
+  color: var(--color-ink-muted-48);
+  font-size: 21rpx;
+}
+
+.history-item-del {
+  flex-shrink: 0;
+  padding: 8rpx 18rpx;
+  color: #b42318;
+  background: #fff5f4;
+  border-radius: var(--radius-pill);
+  font-size: 22rpx;
 }
 
 .composer {
@@ -385,39 +582,44 @@ page {
 .composer-input {
   box-sizing: border-box;
   flex: 1;
-  min-height: 76rpx;
+  min-height: 88rpx;
   max-height: 190rpx;
-  padding: 17rpx 22rpx;
+  padding: 21rpx 26rpx;
   color: var(--color-ink);
   background: var(--color-canvas);
   border: 2rpx solid var(--color-hairline);
-  border-radius: 28rpx;
+  border-radius: var(--radius-md);
   font-size: 28rpx;
   line-height: 1.45;
 }
 
-.composer-placeholder {
-  color: #a1a1a6;
-}
-
+/* 用 view 而非原生 button，避免小程序默认按钮样式把圆钮撑成椭圆 */
 .send-button {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 112rpx;
-  height: 76rpx;
-  margin: 0;
-  padding: 0;
+  align-self: flex-end;
+  width: 64rpx;
+  min-width: 64rpx;
+  max-width: 64rpx;
+  height: 64rpx;
+  margin: 0 0 12rpx;
+  padding: 0 0 3rpx;
+  box-sizing: border-box;
   color: var(--color-on-primary);
   background: var(--color-primary);
-  border-radius: 26rpx;
-  font-size: 28rpx;
+  border-radius: 50%;
+  font-size: 36rpx;
   font-weight: 600;
-  line-height: 76rpx;
+  line-height: 64rpx;
+}
+
+.send-button--pressed {
+  opacity: 0.85;
 }
 
 .send-button--disabled {
   color: #ffffff;
-  background: #b8cbe0;
+  background: #c4d4e6;
 }

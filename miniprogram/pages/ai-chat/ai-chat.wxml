@@ -1,6 +1,18 @@
 <view class="chat-page">
   <view class="mode-banner" wx:if="{{modeHint}}">{{modeHint}}</view>
 
+  <!-- 会话工具条：新对话 / 历史 -->
+  <view class="chat-toolbar">
+    <view class="toolbar-btn" hover-class="toolbar-btn--pressed" hover-stay-time="80" bindtap="onNewChat">
+      <image class="toolbar-icon" src="/images/chat-new.svg" mode="aspectFit"></image>
+      <text>新对话</text>
+    </view>
+    <view class="toolbar-btn" hover-class="toolbar-btn--pressed" hover-stay-time="80" bindtap="onOpenHistory">
+      <image class="toolbar-icon" src="/images/chat-history.svg" mode="aspectFit"></image>
+      <text>历史</text>
+    </view>
+  </view>
+
   <scroll-view
     class="chat-scroll"
     scroll-y
@@ -9,21 +21,31 @@
     scroll-into-view="{{scrollTarget}}"
   >
     <view class="chat-content">
-      <view class="welcome-card" wx:if="{{!messages.length}}">
-        <view class="welcome-title">你好，我是你的听力健康档案助手</view>
-        <view class="welcome-text">我不只能回答用耳健康问题，还能查阅你的听力测试、用耳记录与健康日志，并帮你把重要的事记进档案。</view>
+      <!-- 空状态：bot 出场 + 居中欢迎语，不做白盒卡片 -->
+      <view class="welcome" wx:if="{{!messages.length}}">
+        <view class="welcome-bot" aria-hidden="true">
+          <view class="welcome-bot-eyes"><view></view><view></view></view>
+        </view>
+        <view class="welcome-title">嗨，我是你的用耳小助手</view>
+        <view class="welcome-text">
+          <view>听力报告、用耳习惯、耳鸣困扰，都可以问我</view>
+          <view>我也能帮你把重要的事记进健康档案</view>
+        </view>
         <view class="archive-entry" bindtap="onOpenArchive" hover-class="archive-entry--pressed" hover-stay-time="80">
           <text class="archive-entry-text">查看我的健康档案</text>
           <image class="archive-entry-arrow" src="/images/arrow.svg" mode="aspectFit"></image>
         </view>
-        <view class="suggestion-list">
-          <view
-            class="suggestion-chip"
-            wx:for="{{suggestions}}"
-            wx:key="*this"
-            data-question="{{item}}"
-            bindtap="sendSuggestion"
-          >{{item}}</view>
+        <view class="suggestion-block">
+          <view class="suggestion-label">你可以问问</view>
+          <view class="suggestion-list">
+            <view
+              class="suggestion-chip"
+              wx:for="{{suggestions}}"
+              wx:key="*this"
+              data-question="{{item}}"
+              bindtap="sendSuggestion"
+            >{{item}}</view>
+          </view>
         </view>
       </view>
 
@@ -34,7 +56,9 @@
         wx:key="id"
         wx:for-index="index"
       >
-        <view class="message-ai-mark" wx:if="{{item.role === 'assistant'}}" aria-hidden="true">AI</view>
+        <view class="message-ai-mark" wx:if="{{item.role === 'assistant'}}" aria-hidden="true">
+          <view class="ai-mark-eyes"><view></view><view></view></view>
+        </view>
 
         <view class="message-stack">
           <view class="message-bubble message-bubble--{{item.role}}" wx:if="{{item.content}}">
@@ -82,7 +106,9 @@
       </view>
 
       <view class="message-row message-row--assistant" id="chat-loading" wx:if="{{loading}}">
-        <view class="message-ai-mark" aria-hidden="true">AI</view>
+        <view class="message-ai-mark" aria-hidden="true">
+          <view class="ai-mark-eyes"><view></view><view></view></view>
+        </view>
         <view class="message-bubble message-bubble--assistant loading-bubble">
           <text>AI 正在思考</text>
           <view class="loading-dots" aria-hidden="true">
@@ -100,13 +126,10 @@
   </scroll-view>
 
   <view class="chat-footer">
-    <view class="chat-disclaimer">AI 内容仅用于听力健康教育，不构成医学诊断，也不能替代专业听力检查或医生建议。</view>
     <view class="composer">
       <textarea
         class="composer-input"
         value="{{inputValue}}"
-        placeholder="问我听力状况，或让我帮你记点什么"
-        placeholder-class="composer-placeholder"
         maxlength="500"
         auto-height
         fixed
@@ -115,11 +138,40 @@
         bindinput="onInput"
         bindconfirm="onConfirm"
       ></textarea>
-      <button
+      <view
         class="send-button {{loading || !inputValue ? 'send-button--disabled' : ''}}"
-        disabled="{{loading || !inputValue}}"
+        hover-class="send-button--pressed"
+        hover-stay-time="80"
         bindtap="sendCurrentInput"
-      >发送</button>
+      >↑</view>
     </view>
+    <view class="chat-disclaimer">AI 生成内容仅供健康参考，不构成医学诊断</view>
+  </view>
+
+  <!-- 历史对话抽屉：点击恢复会话，删除需二次确认 -->
+  <view class="history-mask" wx:if="{{historyVisible}}" bindtap="onCloseHistory"></view>
+  <view class="history-panel" wx:if="{{historyVisible}}">
+    <view class="history-head">
+      <text class="history-title">历史对话</text>
+      <view class="history-close" hover-class="history-close--pressed" hover-stay-time="80" bindtap="onCloseHistory">关闭</view>
+    </view>
+    <scroll-view class="history-list" scroll-y>
+      <view class="history-empty" wx:if="{{!historySessions.length}}">还没有历史对话</view>
+      <view
+        class="history-item"
+        wx:for="{{historySessions}}"
+        wx:key="id"
+        hover-class="history-item--pressed"
+        hover-stay-time="80"
+        data-id="{{item.id}}"
+        bindtap="onLoadSession"
+      >
+        <view class="history-item-main">
+          <view class="history-item-title">{{item.title}}</view>
+          <view class="history-item-meta">{{item.timeText}} · {{item.count}} 条消息</view>
+        </view>
+        <view class="history-item-del" data-id="{{item.id}}" catchtap="onDeleteSession">删除</view>
+      </view>
+    </scroll-view>
   </view>
 </view>
