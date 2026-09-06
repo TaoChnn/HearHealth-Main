@@ -36,6 +36,34 @@ const HEALTH_REMINDER_STORAGE_KEY = 'hearHealthDailyRiskReminder';
 // 周几标签（getDay：0=周日，6=周六）
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
+// AI 入口边框的"健康色带"：与今日用耳风险三档联动（与圆环用色同源），
+// 蓝色=健康，接近阈值过渡为琥珀黄，超标后为紫红，色值保持淡彩以贴合玻璃质感。
+const AI_BORDER_GRADIENTS = {
+  normal: 'linear-gradient(120deg, #c9deff, #bfe2ff 30%, #cdeaff 58%, #d4e4ff 82%, #c2dcff)',
+  warning: 'linear-gradient(120deg, #ffe9b8, #ffe0a6 32%, #ffd9ae 56%, #fff1c4 80%, #ffe6ac)',
+  danger: 'linear-gradient(120deg, #e9ccff, #ffc2dd 30%, #ffa8d2 58%, #f0c2ff 82%, #ffc9e2)'
+};
+
+// 边框向内渗透光的颜色，随色带同步变化（通过 CSS 变量 --ai-glow 注入）
+const AI_GLOW_COLORS = {
+  normal: 'rgba(140, 180, 255, 0.14)',
+  warning: 'rgba(255, 190, 100, 0.16)',
+  danger: 'rgba(255, 130, 190, 0.18)'
+};
+
+// bot 球体渐变与光晕：比边框色带深一档保持焦点感，随风险档位与边框同色系
+const AI_BALL_GRADIENTS = {
+  normal: 'linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8)',
+  warning: 'linear-gradient(135deg, #ffd166, #ffb14d 45%, #ffe08a)',
+  danger: 'linear-gradient(135deg, #c084ff, #ff6fa8 45%, #ff8fb0)'
+};
+
+const AI_HALO_COLORS = {
+  normal: 'rgba(140, 180, 255, 0.4)',
+  warning: 'rgba(255, 190, 100, 0.42)',
+  danger: 'rgba(255, 130, 190, 0.45)'
+};
+
 function pad2(value) {
   return value < 10 ? `0${value}` : `${value}`;
 }
@@ -66,7 +94,10 @@ Page({
     trackEndCapColor: '#e8e8ed',
     healthStatus: 'normal',
     healthText: '正在加载今天的应用内记录…',
-    healthDismissed: false,
+    aiBorderGradient: AI_BORDER_GRADIENTS.normal,
+    aiGlowColor: AI_GLOW_COLORS.normal,
+    aiBallGradient: AI_BALL_GRADIENTS.normal,
+    aiHaloColor: AI_HALO_COLORS.normal,
     locationDenied: false,
     weekData: [], // 近7天数据（今天在最右），由 loadUsageData 生成
     maxWeekHours: 4,
@@ -245,6 +276,10 @@ Page({
       progressGradient,
       progressColor,
       healthStatus,
+      aiBorderGradient: AI_BORDER_GRADIENTS[healthStatus] || AI_BORDER_GRADIENTS.normal,
+      aiGlowColor: AI_GLOW_COLORS[healthStatus] || AI_GLOW_COLORS.normal,
+      aiBallGradient: AI_BALL_GRADIENTS[healthStatus] || AI_BALL_GRADIENTS.normal,
+      aiHaloColor: AI_HALO_COLORS[healthStatus] || AI_HALO_COLORS.normal,
       capStartLeft,
       capStartTop,
       capEndLeft,
@@ -389,12 +424,6 @@ Page({
       selected: i === index ? !item.selected : false
     }));
     this.setData({ weekData });
-  },
-
-  dismissHealth() {
-    // 卡片常驻，点击后仅隐藏"知道了"按钮（本次会话内），下次进入重新出现
-    this.setData({ healthDismissed: true });
-    wx.showToast({ title: '好的，注意护耳', icon: 'none', duration: 1500 });
   },
 
   goTest() {

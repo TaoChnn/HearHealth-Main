@@ -50,15 +50,32 @@
     </view>
   </view>
 
-  <!-- 健康提示（常驻组件，不因点击消失） -->
-  <view class="health-card">
-    <view class="health-icon-wrap">
-      <text class="health-icon">💡</text>
+  <!-- AI 助手入口：Liquid Glass 质感卡片，边框为"健康色带"（蓝→黄→紫红随用耳风险变化），bot 球同色、会眨眼 -->
+  <view class="ai-entry-wrap">
+    <view
+      class="ai-entry-card"
+      style="background-image: {{aiBorderGradient}}; --ai-glow: {{aiGlowColor}}; --ai-band: {{aiBallGradient}}; --ai-halo: {{aiHaloColor}};"
+      hover-class="ai-entry-card--pressed"
+      aria-label="今日用耳提示，点击打开用耳 AI 助手"
+      bindtap="goAiChat"
+    >
+      <view class="ai-entry-card-inner">
+        <view class="ai-entry-badge-wrap">
+          <view class="ai-entry-glow"></view>
+          <view class="ai-entry-badge">
+            <view class="ai-entry-eyes">
+              <view class="ai-entry-eye"></view>
+              <view class="ai-entry-eye"></view>
+            </view>
+          </view>
+        </view>
+        <view class="ai-entry-content">
+          <view class="ai-entry-title">问问 AI 助手</view>
+          <view class="ai-entry-tip">{{healthText}}</view>
+        </view>
+        <view class="ai-entry-arrow">›</view>
+      </view>
     </view>
-    <view class="health-content">
-      <view class="health-text">{{healthText}}</view>
-    </view>
-    <view class="health-btn" wx:if="{{!healthDismissed}}" bindtap="dismissHealth">知道了</view>
   </view>
 
   <!-- 近7天应用内代理记录概览 -->
@@ -93,13 +110,6 @@
       </view>
     </view>
   </view>
-
-  <view
-    class="ai-fab"
-    hover-class="ai-fab--pressed"
-    aria-label="打开用耳 AI 助手"
-    bindtap="goAiChat"
-  >AI</view>
 
   <view class="tabbar-placeholder"></view>
 </view>
