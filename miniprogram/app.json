@@ -14,6 +14,7 @@
     "pages/community/detail",
     "pages/community/publish",
     "pages/profile/my-posts",
+    "pages/profile/health-archive",
     "pages/profile/test-history",
     "pages/profile/edit-profile",
     "pages/profile/settings",

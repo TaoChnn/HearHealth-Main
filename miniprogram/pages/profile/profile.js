@@ -30,6 +30,12 @@ Page({
         id: 'content',
         items: [
           {
+            id: 'health-archive',
+            title: '健康档案',
+            icon: '/images/icons/headphones.svg',
+            url: '/pages/profile/health-archive'
+          },
+          {
             id: 'my-posts',
             title: '我的帖子',
             icon: '/images/icons/business.png',

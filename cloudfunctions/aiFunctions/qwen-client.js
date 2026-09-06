@@ -214,9 +214,50 @@ async function requestHearingHealthChat({ systemPrompt, messages }) {
   return { content, model: config.model }
 }
 
+// Agent 对话：带工具声明的一轮请求。返回完整的 assistant message，
+// 可能只包含 content（可以直接回答），也可能带 tool_calls（需要云函数执行工具后继续追问）
+async function requestAgentChat({ systemPrompt, messages, tools }) {
+  const config = getQwenConfig()
+  const payload = {
+    model: config.model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ],
+    enable_thinking: false
+  }
+  // 最后一轮不传工具，强制模型把结论写成文字而不是再发起一次工具调用
+  if (Array.isArray(tools) && tools.length) {
+    payload.tools = tools
+    payload.tool_choice = 'auto'
+  }
+
+  const response = await postJson(config.endpoint, config.apiKey, payload)
+
+  const message = response && response.choices && response.choices[0] &&
+    response.choices[0].message
+  if (!message || typeof message !== 'object') {
+    throw new QwenClientError('MODEL_INVALID_RESPONSE', 'AI 助手未返回有效内容')
+  }
+
+  return { message, model: config.model }
+}
+
+// 大模型是否完成配置：未配置时 Agent 走本地兜底回复，保证档案相关功能仍可用
+function isConfigured() {
+  try {
+    getQwenConfig()
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
 module.exports = {
   QwenClientError,
   getQwenConfig,
+  isConfigured,
   requestHearingAnalysis,
-  requestHearingHealthChat
+  requestHearingHealthChat,
+  requestAgentChat
 }

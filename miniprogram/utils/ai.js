@@ -40,9 +40,28 @@ function chatHearingHealth(messages) {
   })
 }
 
+// 健康档案 Agent：带档案上下文的对话。
+// confirm 用于把用户已确认的写入动作回传，云函数会重新校验参数后再落库
+function agentChat(messages, confirm) {
+  const payload = {
+    messages: Array.isArray(messages) ? messages : []
+  }
+  if (confirm && typeof confirm === 'object') {
+    payload.confirm = confirm
+  }
+  return callAi('agentChat', payload)
+}
+
+// 撤销一次 Agent 已完成的写入（undo 由写入时服务端生成并随结果返回）
+function undoAgentAction(undo) {
+  return callAi('undoAgentAction', { undo: undo || null })
+}
+
 module.exports = {
   AiRequestError,
   callAi,
   analyzeHearingTest,
-  chatHearingHealth
+  chatHearingHealth,
+  agentChat,
+  undoAgentAction
 }

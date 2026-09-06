@@ -32,6 +32,33 @@ const DB_VALUE_FLOOR = 20
 const DB_VALUE_CEIL = 120
 const POINTS_LEDGER_LIMIT = 50
 
+// 健康档案（Agent 可写、用户可见）：字段规则须与 aiFunctions/archive.js 保持一致
+const HEALTH_NOTES = 'health_notes'
+const AGENT_MEMORY = 'agent_memory'
+const NOTE_TYPES = ['symptom', 'medication', 'visit', 'habit', 'note']
+const NOTE_TYPE_LABELS = {
+  symptom: '症状',
+  medication: '用药',
+  visit: '就医',
+  habit: '习惯',
+  note: '备注'
+}
+const MEMORY_KINDS = ['fact', 'todo']
+const MEMORY_KIND_LABELS = {
+  fact: '长期情况',
+  todo: '待办'
+}
+const MAX_NOTE_LENGTH = 200
+// MAX_ARCHIVE_ITEMS：档案单次返回的日志/记忆条数上限；记忆由 aiFunctions 写入，
+// 本函数只负责读取与删除，故无需长度校验常量
+const MAX_ARCHIVE_ITEMS = 50
+const FREQUENCIES = [125, 250, 500, 1000, 2000, 4000]
+// 日期按 UTC+8 归一：云函数运行环境的系统时区不保证与用户所在时区一致
+const TZ_OFFSET_MS = 8 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+const WARNING_PROGRESS = 70
+const DANGER_PROGRESS = 90
+
 async function ensureCollection(name) {
   try {
     await db.createCollection(name)
@@ -167,6 +194,8 @@ async function login(event) {
   await ensureCollection('user_favorites')
   await ensureCollection('usage_records')
   await ensureCollection('points_ledger')
+  await ensureCollection(HEALTH_NOTES)
+  await ensureCollection(AGENT_MEMORY)
 
   const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { success: false, errMsg: 'missing openid' }
@@ -536,8 +565,309 @@ async function getPointsSummary(event) {
   }
 }
 
+function pad2(value) {
+  return value < 10 ? `0${value}` : `${value}`
+}
+
+// 档案里的时间统一按 UTC+8 展示，与小程序端的按天口径一致
+function formatArchiveDate(value) {
+  const timestamp = toTimestamp(value)
+  if (!timestamp) return '时间未知'
+  const date = new Date(timestamp + TZ_OFFSET_MS)
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
+}
+
+function archiveDateKey(timestamp) {
+  const date = new Date(Number(timestamp) + TZ_OFFSET_MS)
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
+}
+
+// 单耳各频点的相对音量阈值：测得为数值，未测得为 null
+function earThresholdMap(list) {
+  const map = {}
+  ;(Array.isArray(list) ? list : []).forEach(item => {
+    if (!item || !Number.isFinite(Number(item.frequency))) return
+    const frequency = Number(item.frequency)
+    const measured = Boolean(item.detected) && Number.isFinite(Number(item.thresholdPercent))
+    map[frequency] = measured ? Math.round(Number(item.thresholdPercent)) : null
+  })
+  return map
+}
+
+function earSummary(map) {
+  const values = FREQUENCIES.map(f => map[f]).filter(v => Number.isFinite(v))
+  if (!values.length) return { detected: 0, average: null }
+  return {
+    detected: values.length,
+    average: Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
+  }
+}
+
+// 用耳汇总：缺失的日期按 0 计入，避免只统计有记录的几天把日均算高
+function summarizeUsage(rows, windowDays, thresholdHours) {
+  const secondsByDay = {}
+  rows.forEach(row => {
+    const key = typeof row.dateKey === 'string' ? row.dateKey : ''
+    if (key) secondsByDay[key] = Math.max(0, Math.round(Number(row.seconds) || 0))
+  })
+
+  const days = Math.max(1, Number(windowDays) || 1)
+  let totalSeconds = 0
+  for (let index = 0; index < days; index += 1) {
+    totalSeconds += secondsByDay[archiveDateKey(Date.now() - index * DAY_MS)] || 0
+  }
+
+  let hpCount = 0
+  let hpSum = 0
+  let hpMax = null
+  rows.forEach(row => {
+    if (Number.isFinite(Number(row.hpCount)) && Number.isFinite(Number(row.hpSum))) {
+      hpCount += Number(row.hpCount)
+      hpSum += Number(row.hpSum)
+    }
+    if (Number.isFinite(Number(row.hpMax))) {
+      hpMax = hpMax === null ? Number(row.hpMax) : Math.max(hpMax, Number(row.hpMax))
+    }
+  })
+
+  const avgSeconds = Math.round(totalSeconds / days)
+  const limitSeconds = (Number(thresholdHours) || 2) * 3600
+  const progress = limitSeconds > 0 ? Math.round((avgSeconds / limitSeconds) * WARNING_PROGRESS) : 0
+  let status = 'normal'
+  if (progress >= DANGER_PROGRESS) status = 'danger'
+  else if (progress >= WARNING_PROGRESS) status = 'warning'
+
+  return {
+    windowDays: days,
+    avgHours: Number((avgSeconds / 3600).toFixed(1)),
+    thresholdHours: Number(thresholdHours) || 2,
+    avgVolume: hpCount > 0 ? Math.round(hpSum / hpCount) : null,
+    maxVolume: hpMax,
+    status
+  }
+}
+
+function toNoteView(doc) {
+  return {
+    id: doc._id,
+    type: NOTE_TYPES.includes(doc.type) ? doc.type : 'note',
+    typeLabel: NOTE_TYPE_LABELS[doc.type] || '备注',
+    content: typeof doc.content === 'string' ? doc.content : '',
+    occurredAt: toTimestamp(doc.occurredAt),
+    occurredAtText: formatArchiveDate(doc.occurredAt),
+    source: doc.source === 'agent' ? 'agent' : 'user'
+  }
+}
+
+function toMemoryView(doc) {
+  return {
+    id: doc._id,
+    kind: MEMORY_KINDS.includes(doc.kind) ? doc.kind : 'fact',
+    kindLabel: MEMORY_KIND_LABELS[doc.kind] || '长期情况',
+    content: typeof doc.content === 'string' ? doc.content : '',
+    createdAtText: formatArchiveDate(doc.createdAt)
+  }
+}
+
+// 档案完整度：既是档案主页的进度条，也是 Agent 判断「还缺什么」的依据
+function buildCompleteness({ deviceModel, testCount, notes, usageSeconds }) {
+  const items = [
+    { key: 'device', label: '耳机型号', done: Boolean(deviceModel) },
+    { key: 'test', label: '首次听力测试', done: testCount > 0 },
+    { key: 'trend', label: '两次以上测试（可对比趋势）', done: testCount >= 2 },
+    { key: 'usage', label: '用耳记录', done: usageSeconds > 0 },
+    { key: 'note', label: '健康日志', done: notes.length > 0 },
+    {
+      key: 'visit',
+      label: '就医或用药记录',
+      done: notes.some(note => note.type === 'visit' || note.type === 'medication')
+    }
+  ]
+  const done = items.filter(item => item.done).length
+  return {
+    percent: Math.round((done / items.length) * 100),
+    items,
+    missing: items.filter(item => !item.done).map(item => item.label)
+  }
+}
+
+function emptyArchive() {
+  return {
+    completeness: buildCompleteness({ deviceModel: '', testCount: 0, notes: [], usageSeconds: 0 }),
+    profile: { deviceModel: '', reminderThreshold: 2, testCount: 0, usageSeconds: 0 },
+    tests: [],
+    notes: [],
+    memory: [],
+    usage: { weekly: null, monthly: null }
+  }
+}
+
+// 档案主页的整体视图：一次拉齐概况、测试时间轴、健康日志、AI 记忆与用耳汇总
+async function getHealthArchive() {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: true, data: emptyArchive() }
+
+  await ensureCollection(HEALTH_NOTES)
+  await ensureCollection(AGENT_MEMORY)
+
+  const toDate = archiveDateKey(Date.now())
+  const fromDate = archiveDateKey(Date.now() - 29 * DAY_MS)
+
+  const [user, tests, notes, memory, usage] = await Promise.all([
+    getUserDoc(OPENID).catch(() => null),
+    db.collection('test_records')
+      .where({ openid: OPENID })
+      .orderBy('completedAt', 'desc')
+      .limit(20)
+      .field({ openid: false })
+      .get()
+      .then(res => res.data)
+      .catch(() => []),
+    db.collection(HEALTH_NOTES)
+      .where({ openid: OPENID })
+      .orderBy('occurredAt', 'desc')
+      .limit(MAX_ARCHIVE_ITEMS)
+      .get()
+      .then(res => res.data)
+      .catch(() => []),
+    db.collection(AGENT_MEMORY)
+      .where({ openid: OPENID })
+      .orderBy('createTime', 'desc')
+      .limit(MAX_ARCHIVE_ITEMS)
+      .get()
+      .then(res => res.data)
+      .catch(() => []),
+    db.collection('usage_records')
+      .where({ openid: OPENID, dateKey: _.gte(fromDate).and(_.lte(toDate)) })
+      .limit(200)
+      .get()
+      .then(res => res.data)
+      .catch(() => [])
+  ])
+
+  const settings = (user && user.settings && typeof user.settings === 'object') ? user.settings : {}
+  const thresholdHours = [1, 2, 3, 4].includes(Number(settings.reminderThreshold))
+    ? Number(settings.reminderThreshold)
+    : 2
+  const noteList = notes.map(toNoteView)
+
+  const testList = (Array.isArray(tests) ? tests : []).map(item => {
+    const left = earSummary(earThresholdMap(item.ears && item.ears.left))
+    const right = earSummary(earThresholdMap(item.ears && item.ears.right))
+    const timestamp = toTimestamp(item.completedAt)
+    return {
+      id: item._id,
+      completedAt: timestamp,
+      occurredAtText: formatArchiveDate(item.completedAt),
+      leftDetected: left.detected,
+      leftAverage: left.average,
+      rightDetected: right.detected,
+      rightAverage: right.average
+    }
+  })
+
+  return {
+    success: true,
+    data: {
+      completeness: buildCompleteness({
+        deviceModel: (user && user.deviceModel) || '',
+        testCount: Number(user && user.testCount) || 0,
+        notes: noteList,
+        usageSeconds: Number(user && user.usageSeconds) || 0
+      }),
+      profile: {
+        deviceModel: (user && user.deviceModel) || '',
+        reminderThreshold: thresholdHours,
+        testCount: Number(user && user.testCount) || 0,
+        usageSeconds: Number(user && user.usageSeconds) || 0
+      },
+      tests: testList,
+      notes: noteList,
+      memory: memory.map(toMemoryView),
+      usage: {
+        weekly: summarizeUsage(usage.slice(-7), 7, thresholdHours),
+        monthly: summarizeUsage(usage, 30, thresholdHours)
+      }
+    }
+  }
+}
+
+// 用户自己在档案主页添加一条日志（区别于 Agent 通过工具写入的那条，source 记为 user）
+async function addHealthNote(event) {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  await ensureCollection(HEALTH_NOTES)
+  // 注意：event.type 是云函数的分发字段，日志类型必须走独立字段名，否则恒为 addHealthNote
+  const type = NOTE_TYPES.includes(event.noteType) ? event.noteType : 'note'
+  const content = normalizeText(event.content, MAX_NOTE_LENGTH)
+  if (!content) return { success: false, errMsg: 'invalid content' }
+
+  const occurredAt = Number.isFinite(Number(event.occurredAt))
+    ? new Date(Number(event.occurredAt))
+    : new Date()
+
+  const res = await db.collection(HEALTH_NOTES).add({
+    data: {
+      openid: OPENID,
+      type,
+      content,
+      occurredAt,
+      source: 'user',
+      createTime: new Date()
+    }
+  })
+  return { success: true, data: { _id: res._id } }
+}
+
+async function removeHealthNote(event) {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  const id = normalizeText(event.id, 64)
+  if (!id) return { success: false, errMsg: 'invalid id' }
+  await db.collection(HEALTH_NOTES).where({ openid: OPENID, _id: id }).remove()
+  return { success: true }
+}
+
+async function removeAgentMemory(event) {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  const id = normalizeText(event.id, 64)
+  if (!id) return { success: false, errMsg: 'invalid id' }
+  await db.collection(AGENT_MEMORY).where({ openid: OPENID, _id: id }).remove()
+  return { success: true }
+}
+
+// 清空档案里由日志与记忆构成的部分。听力测试与用耳记录属于原始测量数据，不在这里删除
+async function clearHealthArchive() {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { success: false, errMsg: 'missing openid' }
+
+  const removeAll = async name => {
+    for (;;) {
+      let res
+      try {
+        res = await db.collection(name).where({ openid: OPENID }).limit(100).get()
+      } catch (e) {
+        return
+      }
+      if (!res.data.length) return
+      await Promise.all(res.data.map(doc =>
+        db.collection(name).doc(doc._id).remove().catch(() => {})
+      ))
+      if (res.data.length < 100) return
+    }
+  }
+
+  await Promise.all([removeAll(HEALTH_NOTES), removeAll(AGENT_MEMORY)])
+  return { success: true, data: { cleared: true } }
+}
+
 // 注销账号：删除该 OPENID 名下的全部云端数据，操作不可逆。
-// 只处理本账号的私有数据（users / usage_records / test_records / user_favorites / points_ledger）；
+// 只处理本账号的私有数据（users / usage_records / test_records / user_favorites / points_ledger
+// / health_notes / agent_memory）；
 // 社区帖子属于公开内容且带有他人的点赞与评论，不在这里连带删除，需要脱敏时另行处理。
 // 每次最多取 100 条循环删除，避免单次批量删除超限；集合不存在时视为已清空。
 async function removeAllByOpenid(name, openid) {
@@ -563,7 +893,15 @@ async function deleteAccount() {
   if (!OPENID) return { success: false, errMsg: 'missing openid' }
 
   const removed = {}
-  const collections = ['usage_records', 'test_records', 'user_favorites', 'points_ledger', 'users']
+  const collections = [
+    'usage_records',
+    'test_records',
+    'user_favorites',
+    'points_ledger',
+    HEALTH_NOTES,
+    AGENT_MEMORY,
+    'users'
+  ]
   for (const name of collections) {
     removed[name] = await removeAllByOpenid(name, OPENID)
   }
@@ -599,6 +937,16 @@ exports.main = async (event) => {
         return await listUsage(event)
       case 'getPointsSummary':
         return await getPointsSummary(event)
+      case 'getHealthArchive':
+        return await getHealthArchive()
+      case 'addHealthNote':
+        return await addHealthNote(event)
+      case 'removeHealthNote':
+        return await removeHealthNote(event)
+      case 'removeAgentMemory':
+        return await removeAgentMemory(event)
+      case 'clearHealthArchive':
+        return await clearHealthArchive()
       case 'deleteAccount':
         return await deleteAccount()
       default:

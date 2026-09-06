@@ -1,4 +1,6 @@
 <view class="chat-page">
+  <view class="mode-banner" wx:if="{{modeHint}}">{{modeHint}}</view>
+
   <scroll-view
     class="chat-scroll"
     scroll-y
@@ -8,8 +10,12 @@
   >
     <view class="chat-content">
       <view class="welcome-card" wx:if="{{!messages.length}}">
-        <view class="welcome-title">你好，我是用耳 AI 助手</view>
-        <view class="welcome-text">你可以问我关于耳机使用、音量控制、噪声暴露和听力保护的问题。</view>
+        <view class="welcome-title">你好，我是你的听力健康档案助手</view>
+        <view class="welcome-text">我不只能回答用耳健康问题，还能查阅你的听力测试、用耳记录与健康日志，并帮你把重要的事记进档案。</view>
+        <view class="archive-entry" bindtap="onOpenArchive" hover-class="archive-entry--pressed" hover-stay-time="80">
+          <text class="archive-entry-text">查看我的健康档案</text>
+          <image class="archive-entry-arrow" src="/images/arrow.svg" mode="aspectFit"></image>
+        </view>
         <view class="suggestion-list">
           <view
             class="suggestion-chip"
@@ -26,9 +32,53 @@
         class="message-row message-row--{{item.role}}"
         wx:for="{{messages}}"
         wx:key="id"
+        wx:for-index="index"
       >
         <view class="message-ai-mark" wx:if="{{item.role === 'assistant'}}" aria-hidden="true">AI</view>
-        <view class="message-bubble message-bubble--{{item.role}}">{{item.content}}</view>
+
+        <view class="message-stack">
+          <view class="message-bubble message-bubble--{{item.role}}" wx:if="{{item.content}}">
+            <text>{{item.content}}</text>
+            <text class="typing-cursor" wx:if="{{item.id === typingMessageId}}"></text>
+          </view>
+
+          <!-- 溯源标签：点任意标签都能跳到档案，回答里用到的档案数据在这里可查证 -->
+          <view class="source-row" wx:if="{{item.sources.length}}">
+            <text class="source-label">依据</text>
+            <view
+              class="source-chip"
+              wx:for="{{item.sources}}"
+              wx:for-item="source"
+              wx:key="*this"
+              bindtap="onOpenArchive"
+            >{{source}}</view>
+          </view>
+
+          <!-- Agent 提议的写入动作：确认前不落库 -->
+          <view class="action-card action-card--{{item.pendingAction.state}}" wx:if="{{item.pendingAction}}">
+            <view class="action-head">
+              <text class="action-title">{{item.pendingAction.title}}</text>
+              <text class="action-state">{{actionStateText[item.pendingAction.state]}}</text>
+            </view>
+            <view class="action-summary">{{item.pendingAction.summary}}</view>
+            <view class="action-buttons" wx:if="{{item.pendingAction.state === 'pending'}}">
+              <button class="action-btn action-btn--ghost" data-index="{{index}}" bindtap="onCancelAction">取消</button>
+              <button class="action-btn action-btn--primary" data-index="{{index}}" bindtap="onConfirmAction">确认</button>
+            </view>
+          </view>
+
+          <!-- 已落库的写入：保留撤销入口，避免用户被 AI 改了数据却无法回退 -->
+          <view class="action-card action-card--applied" wx:if="{{item.appliedAction}}">
+            <view class="action-head">
+              <text class="action-title">{{item.appliedAction.title}}</text>
+              <text class="action-state">{{appliedStateText[item.appliedAction.state]}}</text>
+            </view>
+            <view class="action-summary">{{item.appliedAction.summary}}</view>
+            <view class="action-buttons" wx:if="{{item.appliedAction.state === 'applied'}}">
+              <button class="action-btn action-btn--ghost" data-index="{{index}}" bindtap="onUndoAction">撤销</button>
+            </view>
+          </view>
+        </view>
       </view>
 
       <view class="message-row message-row--assistant" id="chat-loading" wx:if="{{loading}}">
@@ -55,7 +105,7 @@
       <textarea
         class="composer-input"
         value="{{inputValue}}"
-        placeholder="输入你的用耳健康问题"
+        placeholder="问我听力状况，或让我帮你记点什么"
         placeholder-class="composer-placeholder"
         maxlength="500"
         auto-height
