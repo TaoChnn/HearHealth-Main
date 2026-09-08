@@ -2,9 +2,9 @@ const LATEST_TEST_RESULT_KEY = 'latestHearingTestResult'
 // 测试历史页查看某条旧记录时，会把完整结果暂存在这个 key（见 pages/profile/test-history.js）
 const HISTORY_TEST_RESULT_KEY = 'historyHearingTestResult'
 const COMMUNITY_SHARE_DRAFT_KEY = 'hearingReportShareDraft'
-const AI_FIXED_DISCLAIMER = 'AI 解读仅用于听力健康教育和初步筛查结果解释，不构成医学诊断，也不能替代专业听力检查或医生建议。'
 const { callUser } = require('../../utils/auth')
 const { analyzeHearingTest } = require('../../utils/ai')
+const { drawReportPoster } = require('../../utils/report-poster')
 
 function readTestRecordId(value) {
   if (typeof value !== 'string') return ''
@@ -20,14 +20,14 @@ Page({
     hasResult: false,
     chartDrawFailed: false,
     completedAtText: '',
-    totalDetectedText: '0 / 12',
     earSummaries: [],
     navigating: false,
+    shareLoading: false,
     aiStatus: 'idle',
     aiAnalysis: null,
+    aiExpanded: false,
     aiErrorMessage: '',
-    aiCanRetry: false,
-    aiFixedDisclaimer: AI_FIXED_DISCLAIMER
+    aiCanRetry: false
   },
 
   onLoad(options) {
@@ -47,6 +47,13 @@ Page({
 
   onShow() {
     if (this.data.navigating) this.setData({ navigating: false })
+  },
+
+  onUnload() {
+    if (this.chartRetryTimer) {
+      clearTimeout(this.chartRetryTimer)
+      this.chartRetryTimer = null
+    }
   },
 
   loadLatestResult() {
@@ -89,15 +96,13 @@ Page({
   },
 
   renderResult(result) {
-    const leftSummary = this.buildEarSummary('left', 'L', '左耳', result.ears.left)
-    const rightSummary = this.buildEarSummary('right', 'R', '右耳', result.ears.right)
-    const totalDetected = leftSummary.detectedCount + rightSummary.detectedCount
+    const leftSummary = this.buildEarSummary('left', '左耳', result.ears.left)
+    const rightSummary = this.buildEarSummary('right', '右耳', result.ears.right)
 
     this.setData({
       hasResult: true,
       chartDrawFailed: false,
       completedAtText: this.formatCompletedAt(result.completedAt),
-      totalDetectedText: `${totalDetected} / 12`,
       earSummaries: [leftSummary, rightSummary]
     }, () => {
       if (this.chartReady) this.drawThresholdChart()
@@ -132,6 +137,7 @@ Page({
     this.setData({
       aiStatus: 'loading',
       aiAnalysis: null,
+      aiExpanded: false,
       aiErrorMessage: '',
       aiCanRetry: false
     })
@@ -163,6 +169,10 @@ Page({
     this.requestAiAnalysis()
   },
 
+  toggleAiDetail() {
+    this.setData({ aiExpanded: !this.data.aiExpanded })
+  },
+
   getAiErrorMessage(code) {
     switch (code) {
       case 'CONFIG_MISSING':
@@ -178,33 +188,45 @@ Page({
     }
   },
 
+  // 报告页只呈现最短的一层解读：一句结论 + 少量建议，
+  // 更细的现象、双耳对比和局限折叠到「详情」里，避免整页被长文占满。
   prepareAnalysisForView(analysis) {
-    const labels = {
-      routine: '日常建议',
-      monitor: '持续关注',
-      'professional-check': '建议专业检查'
+    const overview = this.clipText(this.cleanAiDisplayText(analysis.overview), 90)
+    const findings = (Array.isArray(analysis.findings) ? analysis.findings : [])
+      .map(item => ({
+        title: this.clipText(this.cleanAiDisplayText(item && item.title), 30),
+        explanation: this.cleanAiDisplayText(item && item.explanation)
+      }))
+      .filter(item => item.title || item.explanation)
+      .slice(0, 2)
+      .map((item, index) => ({ id: index, ...item }))
+    const recommendations = (Array.isArray(analysis.recommendations) ? analysis.recommendations : [])
+      .map(item => ({ text: this.clipText(this.cleanAiDisplayText(item && item.text), 44) }))
+      .filter(item => item.text)
+      .slice(0, 3)
+      .map((item, index) => ({ id: index, ...item }))
+    const redFlags = this.cleanAiDisplayList(analysis.redFlags)
+      .map(item => this.clipText(item, 60))
+      .slice(0, 1)
+    const limitations = this.cleanAiDisplayList(analysis.limitations).slice(0, 2)
+    const earComparison = {
+      summary: this.cleanAiDisplayText(analysis.earComparison && analysis.earComparison.summary)
     }
+
     return {
-      overview: this.cleanAiDisplayText(analysis.overview),
-      findings: (Array.isArray(analysis.findings) ? analysis.findings : [])
-        .map(item => ({
-          title: this.cleanAiDisplayText(item && item.title),
-          explanation: this.cleanAiDisplayText(item && item.explanation)
-        }))
-        .filter(item => item.title || item.explanation),
-      earComparison: {
-        summary: this.cleanAiDisplayText(analysis.earComparison && analysis.earComparison.summary),
-        caution: this.cleanAiDisplayText(analysis.earComparison && analysis.earComparison.caution)
-      },
-      recommendations: (Array.isArray(analysis.recommendations) ? analysis.recommendations : []).map(item => ({
-        priority: item.priority,
-        priorityLabel: labels[item.priority] || '健康建议',
-        text: this.cleanAiDisplayText(item.text),
-        reason: this.cleanAiDisplayText(item.reason)
-      })).filter(item => item.text || item.reason),
-      redFlags: this.cleanAiDisplayList(analysis.redFlags),
-      limitations: this.cleanAiDisplayList(analysis.limitations)
+      overview,
+      findings,
+      earComparison,
+      recommendations,
+      redFlags,
+      limitations,
+      hasDetail: findings.length > 0 || limitations.length > 0 || Boolean(earComparison.summary)
     }
+  },
+
+  clipText(value, max) {
+    if (!value || value.length <= max) return value
+    return `${value.slice(0, max).trim()}…`
   },
 
   cleanAiDisplayText(value) {
@@ -236,7 +258,7 @@ Page({
     )
   },
 
-  buildEarSummary(key, code, name, results) {
+  buildEarSummary(key, name, results) {
     const detectedResults = results.filter(item => this.isValidThreshold(item))
     const detectedCount = detectedResults.length
     const averageThreshold = detectedCount
@@ -245,12 +267,15 @@ Page({
           detectedCount
         )
       : null
+    const level = this.getEarLevel(averageThreshold, detectedCount)
 
     return {
       key,
-      code,
       name,
       detectedCount,
+      levelKey: level.key,
+      levelLabel: level.label,
+      meterPercent: averageThreshold === null ? 100 : averageThreshold,
       detectedText: `${detectedCount} / 6`,
       averageText: averageThreshold === null ? '—' : `${averageThreshold}%`,
       results: results.map(item => {
@@ -263,6 +288,15 @@ Page({
         }
       })
     }
+  },
+
+  // 阈值越低表示越早听到；只给出定性参考，不做听损分级
+  getEarLevel(averageThreshold, detectedCount) {
+    if (detectedCount === 0) return { key: 'notice', label: '未测得' }
+    if (detectedCount < 6) return { key: 'notice', label: '建议复查' }
+    if (averageThreshold <= 35) return { key: 'good', label: '较灵敏' }
+    if (averageThreshold <= 65) return { key: 'watch', label: '一般' }
+    return { key: 'notice', label: '建议复查' }
   },
 
   isValidThreshold(result) {
@@ -283,7 +317,8 @@ Page({
     return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
   },
 
-  drawThresholdChart() {
+  drawThresholdChart(attempt) {
+    const currentAttempt = attempt || 0
     const query = this.createSelectorQuery()
     query
       .select('#thresholdChart')
@@ -291,7 +326,7 @@ Page({
       .exec(result => {
         const canvasInfo = result && result[0]
         if (!canvasInfo || !canvasInfo.node || !canvasInfo.width || !canvasInfo.height) {
-          this.setData({ chartDrawFailed: true })
+          this.retryThresholdChart(currentAttempt)
           return
         }
 
@@ -302,9 +337,23 @@ Page({
             canvasInfo.height
           )
         } catch (error) {
-          this.setData({ chartDrawFailed: true })
+          this.retryThresholdChart(currentAttempt)
         }
       })
+  },
+
+  // 画布随结果条件渲染，刚插入时节点可能还没完成布局；
+  // 查询不到或绘制异常时延迟重试几次，仍失败才展示兜底文案
+  retryThresholdChart(attempt) {
+    if (this.chartRetryTimer) clearTimeout(this.chartRetryTimer)
+    if (attempt >= 3 || !this.data.hasResult) {
+      if (this.data.hasResult) this.setData({ chartDrawFailed: true })
+      return
+    }
+    this.chartRetryTimer = setTimeout(() => {
+      this.chartRetryTimer = null
+      this.drawThresholdChart(attempt + 1)
+    }, 200)
   },
 
   renderThresholdChart(canvas, width, height) {
@@ -428,41 +477,88 @@ Page({
     })
   },
 
+  // 分享到耳友圈：先把整份报告画成一张长图，再把长图作为帖子图片带过去
   shareToCommunity() {
-    if (!this.data.hasResult || this.data.navigating) return
+    if (!this.data.hasResult || this.data.navigating || this.data.shareLoading) return
 
-    const draft = this.buildCommunityShareDraft()
-    try {
-      wx.setStorageSync(COMMUNITY_SHARE_DRAFT_KEY, draft)
-    } catch (error) {
-      wx.showToast({ title: '生成分享内容失败，请重试', icon: 'none' })
-      return
-    }
+    this.setData({ shareLoading: true })
+    wx.showLoading({ title: '生成长图…', mask: true })
 
-    this.setData({ navigating: true })
-    wx.navigateTo({
-      url: '/pages/community/publish?source=hearing-report',
-      fail: () => this.handleNavigationFailure('暂时无法进入发布页')
+    this.createSharePoster()
+      .then(filePath => {
+        wx.hideLoading()
+        this.setData({ shareLoading: false })
+
+        const draft = this.buildCommunityShareDraft(filePath)
+        try {
+          wx.setStorageSync(COMMUNITY_SHARE_DRAFT_KEY, draft)
+        } catch (error) {
+          wx.showToast({ title: '生成分享内容失败，请重试', icon: 'none' })
+          return
+        }
+
+        this.setData({ navigating: true })
+        wx.navigateTo({
+          url: '/pages/community/publish?source=hearing-report',
+          fail: () => this.handleNavigationFailure('暂时无法进入发布页')
+        })
+      })
+      .catch(error => {
+        wx.hideLoading()
+        this.setData({ shareLoading: false })
+        console.warn('[report] share poster failed', error)
+        wx.showToast({ title: '长图生成失败，请重试', icon: 'none' })
+      })
+  },
+
+  createSharePoster() {
+    return new Promise((resolve, reject) => {
+      wx.createSelectorQuery()
+        .select('#shareCanvas')
+        .fields({ node: true, size: true })
+        .exec(result => {
+          const canvasInfo = result && result[0]
+          if (!canvasInfo || !canvasInfo.node) {
+            reject(new Error('share canvas unavailable'))
+            return
+          }
+
+          let size
+          try {
+            size = drawReportPoster(canvasInfo.node, {
+              pixelRatio: this.getDevicePixelRatio(),
+              completedAtText: this.data.completedAtText,
+              earSummaries: this.data.earSummaries,
+              aiAnalysis: this.data.aiStatus === 'success' ? this.data.aiAnalysis : null
+            })
+          } catch (error) {
+            reject(error)
+            return
+          }
+
+          wx.canvasToTempFilePath({
+            canvas: canvasInfo.node,
+            fileType: 'jpg',
+            quality: 0.92,
+            destWidth: size.width * 2,
+            destHeight: size.height * 2,
+            success: response => resolve(response.tempFilePath),
+            fail: reject
+          })
+        })
     })
   },
 
-  buildCommunityShareDraft() {
-    const lines = this.data.earSummaries.map(summary => {
-      const details = summary.results
-        .map(result => `${result.frequency}Hz ${result.thresholdText}`)
-        .join('、')
-      return `${summary.name}：平均相对阈值 ${summary.averageText}，测得 ${summary.detectedText}\n${details}`
-    })
-    const content = [
-      '我完成了一次听力相对阈值筛查。',
-      ...lines,
-      '说明：百分比是固定设备音量下的小程序相对测试值，不是真实分贝，也不代表医学诊断。'
-    ].join('\n\n')
+  buildCommunityShareDraft(imagePath) {
+    const summary = this.data.earSummaries
+      .map(item => `${item.name} ${item.averageText}`)
+      .join(' · ')
 
     return {
       source: 'hearing-report',
       tag: 'report',
-      content: content.slice(0, 500),
+      content: `我完成了一次听力筛查：${summary}。完整结果见长图。`,
+      imagePath,
       createdAt: Date.now()
     }
   },

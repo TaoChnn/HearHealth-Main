@@ -187,18 +187,16 @@
   text-align: center;
 }
 
-/* ========== AI 助手入口（玻璃卡片 + 边框流动色带） ========== */
+/* ========== AI 助手入口（玻璃卡片 + 内衬流动色） ========== */
 .ai-entry-wrap {
   position: relative;
   margin: 0 34rpx 28rpx;
 }
 
-/* 玻璃体的边框色带：颜色只留在棱边，向内微渗；渐变颜色由 JS 按
-   今日用耳风险档位下发（normal 蓝 / warning 黄 / danger 紫红） */
+/* 健康色带不再露出棱边作描边，只垫在玻璃下方透出为填充色；渐变颜色由 JS
+   按今日用耳风险档位下发（normal 蓝 / warning 黄 / danger 紫红） */
 .ai-entry-card {
   position: relative;
-  /* 底层色带：颜色更淡，作为被玻璃折射的"衬色层"而非描边 */
-  padding: 5rpx;
   /* 圆润程度介于普通卡片与胶囊之间 */
   border-radius: 72rpx;
   background-size: 260% 260%;
@@ -223,12 +221,12 @@
   transform: scale(0.98);
 }
 
-/* 内层：干净的白色玻璃体，色彩只从棱边微渗进来 */
+/* 内层：半透明白玻璃体，色带从玻璃下方透出形成内部填充色 */
 .ai-entry-card-inner {
   position: relative;
   display: flex;
   align-items: center;
-  border-radius: 67rpx;
+  border-radius: 72rpx;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(250, 251, 255, 0.52) 48%, rgba(255, 255, 255, 0.62));
   backdrop-filter: blur(18rpx) saturate(1.15);
   -webkit-backdrop-filter: blur(18rpx) saturate(1.15);
@@ -236,11 +234,11 @@
   box-shadow: inset 0 0 6rpx var(--ai-glow, rgba(140, 180, 255, 0.14));
 }
 
-/* bot 圆珠：外圈呼吸光晕 + 随健康档位变色的渐变球体 */
+/* BT·01 形象位：外圈呼吸光晕保留健康色（随风险档位变化），机器人本体为固定硬件拟物配色 */
 .ai-entry-badge-wrap {
   position: relative;
-  width: 92rpx;
-  height: 92rpx;
+  width: 104rpx;
+  height: 102rpx;
   flex-shrink: 0;
 }
 
@@ -248,8 +246,8 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 124rpx;
-  height: 124rpx;
+  width: 128rpx;
+  height: 128rpx;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   /* 光晕颜色 = 健康色，随风险档位变化 */
@@ -263,50 +261,8 @@
 }
 
 .ai-entry-badge {
-  position: relative;
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 球体渐变 = 健康色，由 JS 按风险档位注入（--ai-band），与边框色带同色系 */
-  background-image:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 45%),
-    var(--ai-band, linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8));
-  background-size: auto, 220% 220%;
-  border: 3rpx solid rgba(255, 255, 255, 0.75);
-  box-shadow:
-    inset 0 2rpx 6rpx rgba(255, 255, 255, 0.45),
-    inset 0 -8rpx 14rpx rgba(40, 40, 80, 0.3),
-    0 8rpx 18rpx rgba(40, 28, 100, 0.35);
-  animation: ai-entry-flow 6s ease-in-out infinite alternate;
-}
-
-@keyframes ai-entry-flow {
-  0% { background-position: 0% 0%, 0% 50%; }
-  100% { background-position: 0% 0%, 100% 50%; }
-}
-
-/* bot 眼睛：两颗斜向高光胶囊（参考 bot 头像），偶尔眨一下 */
-.ai-entry-eyes {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  transform: rotate(26deg) translate(2rpx, -6rpx);
-}
-
-.ai-entry-eye {
-  width: 10rpx;
-  height: 22rpx;
-  border-radius: 10rpx;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(235, 240, 255, 0.82));
-  animation: ai-entry-blink 4.2s ease-in-out infinite;
-}
-
-@keyframes ai-entry-blink {
-  0%, 90%, 100% { transform: scaleY(1); }
-  94%, 96% { transform: scaleY(0.1); }
+  position: absolute;
+  inset: 0;
 }
 
 .ai-entry-content {

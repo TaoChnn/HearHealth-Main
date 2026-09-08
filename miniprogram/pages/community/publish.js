@@ -30,7 +30,6 @@ Page({
     maxLen: 500,
     publishing: false,
     canPublish: false, // 有正文或图片才可发布
-    fromHearingReport: false,
     // 进入幕布转场状态
     curtain: {
       show: false,
@@ -46,10 +45,14 @@ Page({
       const draft = this.consumeHearingReportDraft()
       if (draft) {
         const validTag = this.data.tags.some(item => item.key === draft.tag)
+        // 报告分享带过来的是已生成好的长图（本地临时路径），直接作为帖子图片
+        const images = typeof draft.imagePath === 'string' && draft.imagePath
+          ? [draft.imagePath]
+          : []
         this.setData({
           activeTag: validTag ? draft.tag : 'tip',
           content: draft.content.slice(0, this.data.maxLen),
-          fromHearingReport: true
+          images
         })
       }
     } else if (options.content) {

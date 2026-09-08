@@ -11,32 +11,12 @@ page {
   color: var(--color-ink);
 }
 
+/* 消息旁的 BT·01 迷你头像：与首页/欢迎页同一形象 */
 .message-ai-mark {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
-  width: 56rpx;
-  height: 56rpx;
+  width: 58rpx;
+  height: 57rpx;
   margin-right: 14rpx;
-  border-radius: 50%;
-  background-image: linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8);
-  box-shadow: 0 4rpx 10rpx rgba(80, 80, 180, 0.22);
-}
-
-/* 迷你 bot 眼睛：与首页 bot 球同一形象 */
-.ai-mark-eyes {
-  display: flex;
-  gap: 8rpx;
-  transform: rotate(22deg) translateY(-2rpx);
-}
-
-.ai-mark-eyes view {
-  width: 5rpx;
-  height: 13rpx;
-  border-radius: 3rpx;
-  background: rgba(255, 255, 255, 0.95);
 }
 
 .chat-scroll {
@@ -61,7 +41,7 @@ page {
   line-height: 1.4;
 }
 
-/* ===== 空状态欢迎页：bot 居中出场，直接铺在羊皮纸底上 ===== */
+/* ===== 空状态欢迎页：BT·01 居中出场，直接铺在羊皮纸底上 ===== */
 .welcome {
   display: flex;
   flex-direction: column;
@@ -69,33 +49,16 @@ page {
   padding-top: 88rpx;
 }
 
+/* 与原设计一致的悬浮呼吸：待机时缓慢上下浮动 */
 .welcome-bot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 132rpx;
-  height: 132rpx;
-  border-radius: 50%;
-  background-image:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 45%),
-    linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8);
-  box-shadow:
-    inset 0 2rpx 6rpx rgba(255, 255, 255, 0.45),
-    inset 0 -8rpx 14rpx rgba(40, 40, 80, 0.28),
-    0 10rpx 24rpx rgba(40, 28, 100, 0.22);
+  width: 150rpx;
+  height: 147rpx;
+  animation: welcome-bot-bob 3.4s ease-in-out infinite;
 }
 
-.welcome-bot-eyes {
-  display: flex;
-  gap: 12rpx;
-  transform: rotate(22deg) translateY(-4rpx);
-}
-
-.welcome-bot-eyes view {
-  width: 10rpx;
-  height: 28rpx;
-  border-radius: 6rpx;
-  background: rgba(255, 255, 255, 0.95);
+@keyframes welcome-bot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8rpx); }
 }
 
 .welcome-title {

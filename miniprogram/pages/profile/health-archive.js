@@ -30,21 +30,16 @@ function normalizeArchive(data) {
   const source = data && typeof data === 'object' ? data : {}
   const completeness = source.completeness && typeof source.completeness === 'object'
     ? source.completeness
-    : { percent: 0, items: [], missing: [] }
+    : { missing: [] }
   const profile = source.profile && typeof source.profile === 'object'
     ? source.profile
     : { deviceModel: '', reminderThreshold: 2, testCount: 0 }
   const usage = source.usage && typeof source.usage === 'object' ? source.usage : {}
 
-  const percent = Number(completeness.percent) || 0
   return {
     completeness: {
-      percent,
-      items: Array.isArray(completeness.items) ? completeness.items : [],
       missingText: Array.isArray(completeness.missing) ? completeness.missing.join('、') : ''
     },
-    // 进度条宽度整体在 JS 里拼好：wxml 里写 width: {{percent}}% 会被样式检查误报
-    progressStyle: `width: ${percent}%;`,
     profile,
     tests: (Array.isArray(source.tests) ? source.tests : []).map(item => ({
       id: item.id,
@@ -65,8 +60,7 @@ Page({
   data: {
     loading: true,
     loggedIn: false,
-    completeness: { percent: 0, items: [], missingText: '' },
-    progressStyle: 'width: 0%;',
+    completeness: { missingText: '' },
     profile: { deviceModel: '', reminderThreshold: 2, testCount: 0 },
     tests: [],
     notes: [],
@@ -95,8 +89,8 @@ Page({
       })
   },
 
-  onNoteTypeChange(event) {
-    this.setData({ noteTypeIndex: Number(event.detail.value) || 0 })
+  onNoteTypeTap(event) {
+    this.setData({ noteTypeIndex: Number(event.currentTarget.dataset.index) || 0 })
   },
 
   onNoteInput(event) {
@@ -180,10 +174,6 @@ Page({
 
   goSettings() {
     wx.navigateTo({ url: '/pages/profile/settings' })
-  },
-
-  goAiChat() {
-    wx.navigateTo({ url: '/pages/ai-chat/ai-chat' })
   },
 
   onLoginTap() {

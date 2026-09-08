@@ -51,13 +51,7 @@ const AI_GLOW_COLORS = {
   danger: 'rgba(255, 130, 190, 0.18)'
 };
 
-// bot 球体渐变与光晕：比边框色带深一档保持焦点感，随风险档位与边框同色系
-const AI_BALL_GRADIENTS = {
-  normal: 'linear-gradient(135deg, #6ea8ff, #7c5cff 45%, #38bdf8)',
-  warning: 'linear-gradient(135deg, #ffd166, #ffb14d 45%, #ffe08a)',
-  danger: 'linear-gradient(135deg, #c084ff, #ff6fa8 45%, #ff8fb0)'
-};
-
+// bot 光晕：随风险档位与边框同色系（机器人本体为固定硬件拟物配色，健康态只体现在光晕与色带上）
 const AI_HALO_COLORS = {
   normal: 'rgba(140, 180, 255, 0.4)',
   warning: 'rgba(255, 190, 100, 0.42)',
@@ -96,7 +90,6 @@ Page({
     healthText: '正在加载今天的应用内记录…',
     aiBorderGradient: AI_BORDER_GRADIENTS.normal,
     aiGlowColor: AI_GLOW_COLORS.normal,
-    aiBallGradient: AI_BALL_GRADIENTS.normal,
     aiHaloColor: AI_HALO_COLORS.normal,
     locationDenied: false,
     weekData: [], // 近7天数据（今天在最右），由 loadUsageData 生成
@@ -278,7 +271,6 @@ Page({
       healthStatus,
       aiBorderGradient: AI_BORDER_GRADIENTS[healthStatus] || AI_BORDER_GRADIENTS.normal,
       aiGlowColor: AI_GLOW_COLORS[healthStatus] || AI_GLOW_COLORS.normal,
-      aiBallGradient: AI_BALL_GRADIENTS[healthStatus] || AI_BALL_GRADIENTS.normal,
       aiHaloColor: AI_HALO_COLORS[healthStatus] || AI_HALO_COLORS.normal,
       capStartLeft,
       capStartTop,

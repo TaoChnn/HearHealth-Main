@@ -1,32 +1,20 @@
 <view class="archive-page">
   <view class="page-header">
     <view class="page-title">健康档案</view>
-    <view class="page-subtitle">AI 助手只会基于这里的内容给你建议，你可以随时查看、补充或删除。</view>
+    <view class="archive-missing" wx:if="{{completeness.missingText}}">待补充：{{completeness.missingText}}</view>
   </view>
 
   <view class="guest-banner" wx:if="{{!loggedIn}}">
     <view class="guest-copy">
       <view class="guest-title">当前为游客模式</view>
-      <view class="guest-desc">健康日志与 AI 记忆需要登录后才能保存到云端，AI 助手也才能读取你的档案。</view>
+      <view class="guest-desc">登录后健康日志与 AI 记忆会保存到云端。</view>
     </view>
     <view class="guest-login" bindtap="onLoginTap" hover-class="guest-login--pressed">登录</view>
   </view>
 
-  <view class="archive-loading" wx:if="{{loading}}">正在加载档案…</view>
+  <view class="archive-loading" wx:if="{{loading}}">正在加载…</view>
 
   <block wx:else>
-    <view class="card">
-      <view class="completeness-head">
-        <text class="completeness-title">档案完整度</text>
-        <text class="completeness-value">{{completeness.percent}}%</text>
-      </view>
-      <view class="progress-track">
-        <view class="progress-fill" style="{{progressStyle}}"></view>
-      </view>
-      <view class="completeness-missing" wx:if="{{completeness.missingText}}">还缺：{{completeness.missingText}}</view>
-      <view class="completeness-missing" wx:else>主要信息已经比较完整了。</view>
-    </view>
-
     <view class="section-title-row">基本情况</view>
     <view class="group-list">
       <view class="group-row">
@@ -57,7 +45,7 @@
         <text class="row-title">耳机平均音量</text>
         <text class="row-value">约 {{usage.weekly.avgVolume}} 分贝</text>
       </view>
-      <view class="group-row empty-row" wx:if="{{!usage.weekly}}">还没有用耳记录。</view>
+      <view class="group-row empty-row" wx:if="{{!usage.weekly}}">暂无用耳记录</view>
     </view>
 
     <view class="section-title-row">
@@ -65,41 +53,41 @@
       <text class="section-more" bindtap="goTestHistory">全部 ›</text>
     </view>
     <view class="group-list">
-      <view class="group-row timeline-row" wx:for="{{tests}}" wx:key="id">
-        <view class="timeline-dot" aria-hidden="true"></view>
+      <view class="group-row" wx:for="{{tests}}" wx:key="id">
         <view class="row-main">
           <text class="row-title">{{item.occurredAtText}}</text>
-          <view class="row-summary">左耳 {{item.leftText}}　右耳 {{item.rightText}}</view>
+          <view class="row-summary">左耳 {{item.leftText}}，右耳 {{item.rightText}}</view>
         </view>
       </view>
-      <view class="group-row empty-row" wx:if="{{!tests.length}}">还没有测试记录，做第一次测试就能建立基线。</view>
+      <view class="group-row empty-row" wx:if="{{!tests.length}}">暂无测试记录</view>
     </view>
 
     <view class="section-title-row">健康日志</view>
     <view class="note-composer">
-      <picker
-        mode="selector"
-        range="{{noteTypes}}"
-        range-key="label"
-        value="{{noteTypeIndex}}"
-        bindchange="onNoteTypeChange"
-      >
-        <view class="note-type">{{noteTypes[noteTypeIndex].label}} ›</view>
-      </picker>
+      <view class="note-types">
+        <view
+          class="note-type-chip {{noteTypeIndex === index ? 'note-type-chip--active' : ''}}"
+          wx:for="{{noteTypes}}"
+          wx:key="value"
+          data-index="{{index}}"
+          bindtap="onNoteTypeTap"
+        >{{item.label}}</view>
+      </view>
       <textarea
         class="note-input"
         value="{{noteContent}}"
-        placeholder="记录症状、用药、就医或用耳习惯，例如：左耳轻微耳鸣，持续两天"
+        placeholder="记录症状、用药或用耳习惯"
         placeholder-class="note-placeholder"
         maxlength="200"
         auto-height
         bindinput="onNoteInput"
       ></textarea>
-      <button
-        class="note-save {{noteContent && !saving ? '' : 'note-save--disabled'}}"
-        disabled="{{!noteContent || saving}}"
-        bindtap="onSaveNote"
-      >{{saving ? '保存中' : '记一条'}}</button>
+      <view class="note-actions">
+        <view
+          class="note-save {{noteContent && !saving ? '' : 'note-save--disabled'}}"
+          bindtap="onSaveNote"
+        >{{saving ? '保存中' : '保存'}}</view>
+      </view>
     </view>
     <view class="group-list">
       <view class="group-row" wx:for="{{notes}}" wx:key="id">
@@ -110,21 +98,20 @@
         </view>
         <view class="row-delete" data-id="{{item.id}}" bindtap="onDeleteNote">删除</view>
       </view>
-      <view class="group-row empty-row" wx:if="{{!notes.length}}">还没有记录。你可以在这里添加，也可以直接告诉 AI 助手帮你记。</view>
+      <view class="group-row empty-row" wx:if="{{!notes.length}}">暂无记录</view>
     </view>
 
-    <view class="section-title-row">AI 记住的事</view>
-    <view class="section-desc">AI 助手从对话里提取并写入档案的内容。记错了可以直接删掉。</view>
+    <view class="section-title-row">AI 记忆</view>
     <view class="group-list">
       <view class="group-row" wx:for="{{memory}}" wx:key="id">
         <view class="row-main">
           <text class="row-title">{{item.kindLabel}}</text>
           <view class="row-summary note-content">{{item.content}}</view>
-          <view class="row-meta">{{item.createdAtText}} 记下</view>
+          <view class="row-meta">{{item.createdAtText}}</view>
         </view>
         <view class="row-delete" data-id="{{item.id}}" bindtap="onDeleteMemory">删除</view>
       </view>
-      <view class="group-row empty-row" wx:if="{{!memory.length}}">AI 还没有记住任何事。</view>
+      <view class="group-row empty-row" wx:if="{{!memory.length}}">暂无 AI 记忆</view>
     </view>
 
     <view class="section-title-row">数据管理</view>
@@ -134,9 +121,4 @@
       </view>
     </view>
   </block>
-
-  <view class="archive-footer">
-    <view class="archive-footer-text">档案里的所有内容都只属于你，注销账号时会一并删除。</view>
-    <button class="archive-chat-btn" bindtap="goAiChat">去问 AI 助手</button>
-  </view>
 </view>

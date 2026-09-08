@@ -696,12 +696,6 @@
   font-size: 28rpx;
 }
 
-.action-hint {
-  margin-top: 12rpx;
-  color: var(--color-ink-muted-48);
-  font-size: 22rpx;
-}
-
 .ear-complete-card {
   padding: 38rpx 30rpx 30rpx;
   text-align: center;

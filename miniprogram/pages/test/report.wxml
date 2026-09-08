@@ -1,188 +1,143 @@
 <view class="container report-page">
-  <view class="report-header">
-    <view class="report-kicker">相对阈值筛查</view>
-    <view class="report-title">听力报告</view>
-    <view class="report-description">查看本次固定设备音量下，左右耳各频率的相对测试结果</view>
-  </view>
-
   <block wx:if="{{hasResult}}">
-    <view class="report-content">
-      <view class="overview-card">
-        <view class="overview-icon" aria-hidden="true">✓</view>
-        <view class="overview-title">双耳测试已完成</view>
-        <view class="overview-time">{{completedAtText}}</view>
-        <view class="overview-summary">
-          <view class="overview-value">{{totalDetectedText}}</view>
-          <view class="overview-label">测得相对阈值的频率</view>
+    <view class="hero-card">
+      <view class="hero-head">
+        <view class="hero-title">听力报告</view>
+        <view class="hero-time">{{completedAtText}}</view>
+      </view>
+
+      <view class="hero-ears">
+        <view class="hero-ear" wx:for="{{earSummaries}}" wx:key="key">
+          <view class="hero-ear-head">
+            <text class="hero-ear-name">{{item.name}}</text>
+            <text class="hero-ear-tag hero-ear-tag--{{item.levelKey}}">{{item.levelLabel}}</text>
+          </view>
+          <view class="hero-ear-value">{{item.averageText}}</view>
+          <view class="hero-ear-meter">
+            <view class="hero-ear-fill hero-ear-fill--{{item.levelKey}}" style="width: {{item.meterPercent}}%;"></view>
+          </view>
+          <view class="hero-ear-foot">平均相对阈值 · 测得 {{item.detectedText}}</view>
         </view>
       </view>
 
-      <view class="chart-card">
-        <view class="chart-header">
-          <view>
-            <view class="chart-title">频率—相对阈值</view>
-            <view class="chart-description">纵轴越靠上，表示在本次条件下越早听到</view>
-          </view>
-          <view class="chart-unit">%</view>
-        </view>
+      <view class="hero-hint">百分比越小，表示耳朵状况良好</view>
+    </view>
 
+    <view class="section-card">
+      <view class="section-head">
+        <text class="section-title">频率表现</text>
         <view class="chart-legend">
           <view class="legend-item">
             <view class="legend-dot legend-dot--left"></view>
-            <view>左耳</view>
+            <text>左耳</text>
           </view>
           <view class="legend-item">
             <view class="legend-dot legend-dot--right"></view>
-            <view>右耳</view>
-          </view>
-        </view>
-
-        <canvas
-          class="threshold-chart"
-          id="thresholdChart"
-          type="2d"
-          wx:if="{{!chartDrawFailed}}"
-        ></canvas>
-        <view class="chart-fallback" wx:else>当前设备暂时无法绘制图表，请查看下方频率明细。</view>
-        <view class="chart-footnote">未测得的频率不绘制点，也不会跨过该频率连接折线。</view>
-      </view>
-
-      <view class="ear-summary-card" wx:for="{{earSummaries}}" wx:key="key">
-        <view class="ear-summary-header">
-          <view class="ear-summary-badge">{{item.code}}</view>
-          <view class="ear-summary-copy">
-            <view class="ear-summary-title">{{item.name}}结果</view>
-            <view class="ear-summary-description">数字越低，表示本次条件下越早听到</view>
-          </view>
-        </view>
-
-        <view class="ear-stat-row">
-          <view class="ear-stat-item">
-            <view class="ear-stat-value">{{item.averageText}}</view>
-            <view class="ear-stat-label">平均相对阈值</view>
-          </view>
-          <view class="ear-stat-divider"></view>
-          <view class="ear-stat-item">
-            <view class="ear-stat-value">{{item.detectedText}}</view>
-            <view class="ear-stat-label">测得频率</view>
-          </view>
-        </view>
-
-        <view class="threshold-list">
-          <view class="threshold-item" wx:for="{{item.results}}" wx:for-item="result" wx:key="frequency">
-            <view class="threshold-frequency">{{result.frequency}} Hz</view>
-            <view class="threshold-value {{result.detected ? '' : 'threshold-value--missing'}}">{{result.thresholdText}}</view>
+            <text>右耳</text>
           </view>
         </view>
       </view>
 
-      <view class="interpretation-note">
-        <view class="interpretation-title">如何理解结果</view>
-        <view class="interpretation-text">百分比是小程序测试音上限内的线性数字增益。它不是真实分贝，不能用于不同设备之间比较，也不能替代专业听力检查。</view>
-      </view>
-
-      <view class="ai-card">
-        <view class="ai-card-header">
-          <view class="ai-mark" aria-hidden="true">AI</view>
-          <view class="ai-heading-copy">
-            <view class="ai-title">AI 智能解读</view>
-            <view class="ai-subtitle">基于本次筛查结果生成</view>
-          </view>
-        </view>
-
-        <view class="ai-loading" wx:if="{{aiStatus === 'loading'}}">
-          <view class="ai-spinner" aria-hidden="true"></view>
-          <view class="ai-state-title">AI 正在分析本次筛查结果…</view>
-          <view class="ai-state-description">通常需要几秒钟，请稍候</view>
-        </view>
-
-        <view class="ai-result" wx:elif="{{aiStatus === 'success' && aiAnalysis}}">
-          <view class="ai-overview">{{aiAnalysis.overview}}</view>
-
-          <view class="ai-section" wx:if="{{aiAnalysis.findings.length}}">
-            <view class="ai-section-title">观察到的现象</view>
-            <view class="ai-list-card" wx:for="{{aiAnalysis.findings}}" wx:for-item="finding" wx:key="title">
-              <view class="ai-item-title">{{finding.title}}</view>
-              <view class="ai-item-text">{{finding.explanation}}</view>
-            </view>
-          </view>
-
-          <view class="ai-section">
-            <view class="ai-section-title">左右耳对比</view>
-            <view class="ai-comparison-card">
-              <view class="ai-item-text ai-item-text--strong">{{aiAnalysis.earComparison.summary}}</view>
-              <view class="ai-caution">{{aiAnalysis.earComparison.caution}}</view>
-            </view>
-          </view>
-
-          <view class="ai-section" wx:if="{{aiAnalysis.recommendations.length}}">
-            <view class="ai-section-title">用耳健康建议</view>
-            <view class="ai-list-card ai-recommendation" wx:for="{{aiAnalysis.recommendations}}" wx:for-item="recommendation" wx:key="text">
-              <view class="ai-priority ai-priority--{{recommendation.priority}}">{{recommendation.priorityLabel}}</view>
-              <view class="ai-item-title">{{recommendation.text}}</view>
-              <view class="ai-item-text">{{recommendation.reason}}</view>
-            </view>
-          </view>
-
-          <view class="ai-section" wx:if="{{aiAnalysis.redFlags.length}}">
-            <view class="ai-section-title">需要及时关注的情况</view>
-            <view class="ai-note-list ai-note-list--attention">
-              <view class="ai-note-line" wx:for="{{aiAnalysis.redFlags}}" wx:key="*this">{{item}}</view>
-            </view>
-          </view>
-
-          <view class="ai-section" wx:if="{{aiAnalysis.limitations.length}}">
-            <view class="ai-section-title">测试局限</view>
-            <view class="ai-note-list">
-              <view class="ai-note-line" wx:for="{{aiAnalysis.limitations}}" wx:key="*this">{{item}}</view>
-            </view>
-          </view>
-        </view>
-
-        <view class="ai-error" wx:elif="{{aiStatus === 'error'}}">
-          <view class="ai-state-title">AI 解读暂时不可用</view>
-          <view class="ai-state-description">{{aiErrorMessage}}</view>
-          <button class="ai-retry-button" wx:if="{{aiCanRetry}}" bindtap="retryAiAnalysis">重新尝试</button>
-        </view>
-
-        <view class="ai-disclaimer">{{aiFixedDisclaimer}}</view>
+      <view class="chart-wrap">
+        <canvas class="threshold-chart" id="thresholdChart" type="2d"></canvas>
+        <view class="chart-fallback" wx:if="{{chartDrawFailed}}">当前设备无法绘制图表。</view>
       </view>
     </view>
+
+    <view class="ai-card">
+      <view class="ai-head">
+        <view class="ai-badge">AI</view>
+        <text class="ai-title">结果解读</text>
+        <view
+          class="ai-more"
+          wx:if="{{aiStatus === 'success' && aiAnalysis.hasDetail}}"
+          bindtap="toggleAiDetail"
+        >{{aiExpanded ? '收起' : '详情'}}</view>
+      </view>
+
+      <view class="ai-loading" wx:if="{{aiStatus === 'loading'}}">
+        <view class="ai-spinner" aria-hidden="true"></view>
+        <text class="ai-loading-text">正在生成解读…</text>
+      </view>
+
+      <block wx:elif="{{aiStatus === 'success' && aiAnalysis}}">
+        <view class="ai-overview">{{aiAnalysis.overview}}</view>
+
+        <view class="ai-tips" wx:if="{{aiAnalysis.recommendations.length}}">
+          <view class="ai-tip" wx:for="{{aiAnalysis.recommendations}}" wx:for-item="tip" wx:key="id">
+            <view class="ai-tip-dot"></view>
+            <text class="ai-tip-text">{{tip.text}}</text>
+          </view>
+        </view>
+
+        <view class="ai-flags" wx:if="{{aiAnalysis.redFlags.length}}">
+          <text class="ai-flags-title">留意</text>
+          <view class="ai-flag" wx:for="{{aiAnalysis.redFlags}}" wx:for-item="flag" wx:key="*this">{{flag}}</view>
+        </view>
+
+        <view class="ai-detail" wx:if="{{aiExpanded}}">
+          <view class="ai-detail-block" wx:for="{{aiAnalysis.findings}}" wx:for-item="finding" wx:key="id">
+            <view class="ai-detail-title">{{finding.title}}</view>
+            <view class="ai-detail-text">{{finding.explanation}}</view>
+          </view>
+          <view class="ai-detail-block" wx:if="{{aiAnalysis.earComparison.summary}}">
+            <view class="ai-detail-title">左右耳对比</view>
+            <view class="ai-detail-text">{{aiAnalysis.earComparison.summary}}</view>
+          </view>
+          <view class="ai-detail-block" wx:if="{{aiAnalysis.limitations.length}}">
+            <view class="ai-detail-title">测试局限</view>
+            <view class="ai-detail-text" wx:for="{{aiAnalysis.limitations}}" wx:for-item="limit" wx:key="*this">{{limit}}</view>
+          </view>
+        </view>
+      </block>
+
+      <view class="ai-error" wx:elif="{{aiStatus === 'error'}}">
+        <text class="ai-error-text">{{aiErrorMessage}}</text>
+        <text class="ai-error-retry" wx:if="{{aiCanRetry}}" bindtap="retryAiAnalysis">重新生成</text>
+      </view>
+    </view>
+
+    <view class="report-note">结果与 AI 解读仅供参考，不构成医学诊断。</view>
   </block>
 
   <view class="empty-state" wx:else>
     <view class="empty-icon" aria-hidden="true">🎧</view>
-    <view class="empty-title">暂时没有完整测试结果</view>
-    <view class="empty-description">完成左右耳全部频率后，即可在这里查看相对阈值摘要。</view>
+    <view class="empty-title">暂无完整测试结果</view>
   </view>
 
   <view class="report-actions">
     <button
-      class="report-primary-button {{navigating ? 'report-button--disabled' : ''}}"
-      hover-class="report-primary-button--pressed"
-      disabled="{{navigating}}"
+      class="report-button report-button--primary {{(navigating || shareLoading) ? 'report-button--disabled' : ''}}"
+      hover-class="report-button--primary-pressed"
+      disabled="{{navigating || shareLoading}}"
       wx:if="{{hasResult}}"
       bindtap="shareToCommunity"
-    >分享到耳友圈</button>
+    >{{shareLoading ? '生成长图…' : '分享到耳友圈'}}</button>
     <button
-      class="report-primary-button {{navigating ? 'report-button--disabled' : ''}}"
-      hover-class="report-primary-button--pressed"
+      class="report-button report-button--primary {{navigating ? 'report-button--disabled' : ''}}"
+      hover-class="report-button--primary-pressed"
       disabled="{{navigating}}"
       wx:else
       bindtap="startTest"
     >开始测试</button>
-    <button
-      class="report-secondary-button {{navigating ? 'report-button--disabled' : ''}}"
-      hover-class="report-secondary-button--pressed"
-      disabled="{{navigating}}"
-      wx:if="{{hasResult}}"
-      bindtap="startTest"
-    >重新测试</button>
-    <button
-      class="report-secondary-button {{navigating ? 'report-button--disabled' : ''}}"
-      hover-class="report-secondary-button--pressed"
-      disabled="{{navigating}}"
-      bindtap="returnHome"
-    >返回首页</button>
+
+    <view class="report-actions-row">
+      <button
+        class="report-button report-button--ghost {{navigating ? 'report-button--disabled' : ''}}"
+        hover-class="report-button--ghost-pressed"
+        disabled="{{navigating}}"
+        wx:if="{{hasResult}}"
+        bindtap="startTest"
+      >重新测试</button>
+      <button
+        class="report-button report-button--ghost {{navigating ? 'report-button--disabled' : ''}}"
+        hover-class="report-button--ghost-pressed"
+        disabled="{{navigating}}"
+        bindtap="returnHome"
+      >返回首页</button>
+    </view>
   </view>
+
+  <!-- 离屏画布：仅用于绘制分享长图，不参与页面显示 -->
+  <canvas class="share-canvas" id="shareCanvas" type="2d"></canvas>
 </view>

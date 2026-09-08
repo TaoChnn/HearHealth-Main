@@ -23,9 +23,7 @@
     <view class="chat-content">
       <!-- 空状态：bot 出场 + 居中欢迎语，不做白盒卡片 -->
       <view class="welcome" wx:if="{{!messages.length}}">
-        <view class="welcome-bot" aria-hidden="true">
-          <view class="welcome-bot-eyes"><view></view><view></view></view>
-        </view>
+        <view class="welcome-bot bt01-avatar" aria-hidden="true"></view>
         <view class="welcome-title">嗨，我是你的用耳小助手</view>
         <view class="welcome-text">
           <view>听力报告、用耳习惯、耳鸣困扰，都可以问我</view>
@@ -56,9 +54,7 @@
         wx:key="id"
         wx:for-index="index"
       >
-        <view class="message-ai-mark" wx:if="{{item.role === 'assistant'}}" aria-hidden="true">
-          <view class="ai-mark-eyes"><view></view><view></view></view>
-        </view>
+        <view class="message-ai-mark bt01-avatar" wx:if="{{item.role === 'assistant'}}" aria-hidden="true"></view>
 
         <view class="message-stack">
           <view class="message-bubble message-bubble--{{item.role}}" wx:if="{{item.content}}">
@@ -106,9 +102,7 @@
       </view>
 
       <view class="message-row message-row--assistant" id="chat-loading" wx:if="{{loading}}">
-        <view class="message-ai-mark" aria-hidden="true">
-          <view class="ai-mark-eyes"><view></view><view></view></view>
-        </view>
+        <view class="message-ai-mark bt01-avatar" aria-hidden="true"></view>
         <view class="message-bubble message-bubble--assistant loading-bubble">
           <text>AI 正在思考</text>
           <view class="loading-dots" aria-hidden="true">
