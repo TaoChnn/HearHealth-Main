@@ -241,27 +241,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
+  background: rgba(0, 102, 204, 0.07);
   margin-right: var(--spacing-sm);
-}
-
-.menu-icon-box--my-posts {
-  background: rgba(0, 102, 204, 0.07);
-}
-
-.menu-icon-box--skill-library {
-  background: rgba(0, 102, 204, 0.055);
-}
-
-.menu-icon-box--points-shop {
-  background: rgba(0, 102, 204, 0.07);
-}
-
-.menu-icon-box--settings {
-  background: rgba(0, 102, 204, 0.045);
-}
-
-.menu-icon-box--about {
-  background: rgba(122, 122, 122, 0.08);
 }
 
 .menu-icon {

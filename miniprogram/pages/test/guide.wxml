@@ -16,10 +16,6 @@
         bindtap="startTest"
       >开始测试</button>
     </view>
-
-    <view class="legal-note">
-      测试结果仅供参考，不能换算为真实分贝，也不能替代专业医学检查；不同设备间请勿直接比较。如有耳痛、持续耳鸣或明显听力下降，请及时就诊。
-    </view>
   </block>
 
   <block wx:else>

@@ -99,14 +99,6 @@
   opacity: 0.48;
 }
 
-.legal-note {
-  margin-top: var(--spacing-lg);
-  color: var(--color-ink-muted-48);
-  font-size: var(--text-micro-legal);
-  line-height: var(--leading-caption);
-  text-align: center;
-}
-
 /* ========== 准备向导 ========== */
 .prep-progress {
   display: flex;
