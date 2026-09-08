@@ -63,9 +63,9 @@ Page({
       {
         id: 'notice',
         theme: 'blue',
-        tag: '公告',
-        title: '耳友圈全新改版',
-        desc: '发布广场 + 护耳习惯榜，等你来逛'
+        tag: '使用提示',
+        title: '长按下方「耳友圈」',
+        desc: '即可进入发帖页面，分享你的用耳故事'
       },
       {
         id: 'activity',
