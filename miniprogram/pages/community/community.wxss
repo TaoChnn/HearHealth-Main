@@ -1,5 +1,6 @@
-/* 耳友圈广场 —— 设计 token 参考 DesignTemplate/apple-variables.css
-   主色 #0066cc，浅灰底白卡片信息流，1px≈2rpx */
+/* 耳友圈 —— 设计 token 参考 DesignTemplate/apple-variables.css
+   主色 #0066cc，浅灰底白卡片信息流，1px≈2rpx
+   结构：发布广场 / 排行榜 → 轮播 → 最新 + 板块 → 帖子流 */
 
 .community-page {
   display: flex;
@@ -14,74 +15,104 @@
   min-height: 0;
 }
 
-/* 分区导航栏（胶囊选中态，参考 custom-tab-bar 风格） */
-.tab-bar {
-  padding: 24rpx 24rpx 0;
-  border-bottom: 1rpx solid #e0e0e0;
-}
-
-/* 分区变多后改为横向滚动（参考发帖页图片横滚样式） */
-.tab-scroll {
-  width: 100%;
-  white-space: nowrap;
-}
-
-.tab-list {
-  display: inline-flex;
-  padding-bottom: 14rpx;
-}
-
-.tab-item {
-  position: relative;
-  flex: 0 0 auto;
+/* ===== 顶部一级标签：发布广场 / 排行榜 ===== */
+.main-tabs {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 14rpx 30rpx;
-  margin-right: 12rpx;
-  border-radius: 9999rpx;
-  text-align: center;
-  color: #7a7a7a;
+  padding: 10rpx 0 0;
+  background: #ffffff;
+  box-shadow: 0 1rpx 0 rgba(0, 0, 0, 0.05);
+}
+
+.main-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12rpx 8rpx 0;
+}
+
+.main-tab + .main-tab {
+  margin-left: 88rpx;
+}
+
+.main-tab-text {
+  font-size: 32rpx;
+  line-height: 1.3;
+  font-weight: 500;
+  color: #8a8a8e;
   transition: color 0.25s ease;
 }
 
-.tab-item:last-child {
-  margin-right: 0;
-}
-
-.tab-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+.main-tab-line {
+  width: 44rpx;
+  height: 6rpx;
+  margin-top: 8rpx;
   border-radius: 9999rpx;
-  background: rgba(0, 0, 0, 0.06);
-  opacity: 0;
-  transition: opacity 0.25s ease;
+  background: transparent;
+  transition: background 0.25s ease;
 }
 
-.tab-text {
-  position: relative;
-  z-index: 1;
-  font-size: 30rpx;
-  line-height: 1.2;
-  font-weight: 400;
-  color: inherit;
-  transition: font-weight 0.25s ease, color 0.25s ease;
-}
-
-.tab-item--active {
+.main-tab--active .main-tab-text {
   color: #0066cc;
-}
-
-.tab-item--active .tab-bg {
-  opacity: 1;
-}
-
-.tab-item--active .tab-text {
   font-weight: 600;
-  color: #0066cc;
+}
+
+.main-tab--active .main-tab-line {
+  background: #0066cc;
+}
+
+/* ===== 轮播图（公告 / 广告位） ===== */
+.banner-swiper {
+  height: 260rpx;
+  margin: 24rpx 24rpx 0;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.banner-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 36rpx 40rpx;
+  box-sizing: border-box;
+  color: #ffffff;
+}
+
+.banner-card--blue {
+  background: linear-gradient(135deg, #0066cc 0%, #4a9bff 100%);
+}
+
+.banner-card--green {
+  background: linear-gradient(135deg, #00a870 0%, #4fd1a5 100%);
+}
+
+.banner-card--purple {
+  background: linear-gradient(135deg, #5b6cf9 0%, #9b8cff 100%);
+}
+
+.banner-chip {
+  align-self: flex-start;
+  font-size: 20rpx;
+  line-height: 1;
+  padding: 8rpx 16rpx;
+  margin-bottom: 16rpx;
+  border-radius: 9999rpx;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.banner-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.banner-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.4;
+  opacity: 0.85;
 }
 
 /* 顶部公告条：浅蓝底 + 实心「公告」徽标，引导长按 tabBar 发帖 */
@@ -121,7 +152,245 @@
   color: rgba(0, 102, 204, 0.55);
 }
 
-/* 帖子流：浅灰底上的白色圆角小卡片，参考详情页卡片样式（18rpx 圆角 + 轻阴影） */
+/* ===== 最新 / 板块筛选行 ===== */
+.filter-row {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 24rpx 0;
+}
+
+.filter-chip {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 28rpx;
+  margin-right: 16rpx;
+  border-radius: 9999rpx;
+  font-size: 28rpx;
+  color: #7a7a7a;
+  background: rgba(0, 0, 0, 0.05);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+/* 「最新」固定为当前排序方式，保持选中态 */
+.filter-chip--fixed,
+.filter-chip--picked {
+  color: #0066cc;
+  font-weight: 600;
+  background: rgba(0, 102, 204, 0.1);
+}
+
+.filter-arrow {
+  margin-left: 10rpx;
+  font-size: 22rpx;
+  line-height: 1;
+  transition: transform 0.25s ease;
+}
+
+.filter-arrow--up {
+  transform: rotate(180deg);
+}
+
+/* 板块选择面板：白色圆角卡片 + 胶囊标签流式排布 */
+.section-panel {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 20rpx 24rpx 0;
+  padding: 20rpx 16rpx 4rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.04);
+}
+
+.section-item {
+  margin: 0 16rpx 16rpx;
+  padding: 12rpx 26rpx;
+  border-radius: 9999rpx;
+  font-size: 26rpx;
+  color: #4a4a4c;
+  background: #f5f5f7;
+}
+
+.section-item--active {
+  color: #0066cc;
+  font-weight: 600;
+  background: rgba(0, 102, 204, 0.1);
+}
+
+/* ===== 排行榜（护耳积分榜） ===== */
+.rank-page {
+  padding-bottom: 40rpx;
+}
+
+/* 我的积分卡：主题蓝渐变 */
+.my-points {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 24rpx 24rpx 0;
+  padding: 28rpx 32rpx;
+  border-radius: 20rpx;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0066cc 0%, #4a9bff 100%);
+  box-shadow: 0 6rpx 20rpx rgba(0, 102, 204, 0.18);
+}
+
+.my-points-label,
+.my-points-tip {
+  display: block;
+  font-size: 22rpx;
+  opacity: 0.85;
+}
+
+.my-points-value {
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.my-points-right {
+  text-align: right;
+}
+
+.my-points-rank {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.my-points-rank--muted {
+  font-size: 26rpx;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.my-points-tip {
+  margin-top: 8rpx;
+}
+
+.rank-header {
+  padding: 32rpx 32rpx 0;
+}
+
+.rank-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.rank-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #7a7a7a;
+}
+
+.rank-list {
+  padding: 20rpx 24rpx 0;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.04);
+}
+
+/* 当前用户所在的行：浅蓝底突出 */
+.rank-item--me {
+  background: rgba(0, 102, 204, 0.05);
+  box-shadow: 0 2rpx 10rpx rgba(0, 102, 204, 0.12);
+}
+
+/* 名次徽标：前三名金银铜，其余灰底 */
+.rank-no {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44rpx;
+  height: 44rpx;
+  margin-right: 18rpx;
+  border-radius: 9999rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #8a8a8e;
+  background: #f0f0f2;
+}
+
+.rank-no--1 {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ffb800 0%, #ffd15c 100%);
+}
+
+.rank-no--2 {
+  color: #ffffff;
+  background: linear-gradient(135deg, #9aa7b8 0%, #c3cddb 100%);
+}
+
+.rank-no--3 {
+  color: #ffffff;
+  background: linear-gradient(135deg, #cf9663 0%, #e0b58c 100%);
+}
+
+.rank-avatar {
+  flex-shrink: 0;
+  width: 72rpx;
+  height: 72rpx;
+  margin-right: 18rpx;
+  border-radius: 9999rpx;
+  background: #f0f0f0;
+}
+
+.rank-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.rank-nickname {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #1d1d1f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-badge {
+  flex-shrink: 0;
+  margin-left: 12rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  font-size: 20rpx;
+  color: #0066cc;
+  background: rgba(0, 102, 204, 0.12);
+}
+
+.rank-points {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0066cc;
+}
+
+.rank-points-unit {
+  margin-left: 4rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.rank-loading {
+  margin-top: 120rpx;
+  text-align: center;
+  color: #7a7a7a;
+  font-size: 28rpx;
+}
+
+/* ===== 帖子流：浅灰底上的白色圆角小卡片，参考详情页卡片样式（18rpx 圆角 + 轻阴影） ===== */
 .post-list {
   padding: 20rpx 24rpx 40rpx;
 }
@@ -236,11 +505,18 @@
   font-weight: 500;
 }
 
-/* 空状态 */
+/* 空状态（帖子流 / 榜单共用） */
 .empty-tip {
   margin-top: 120rpx;
   text-align: center;
   color: #7a7a7a;
+  font-size: 28rpx;
+}
+
+.empty-retry {
+  display: block;
+  margin-top: 16rpx;
+  color: #0066cc;
   font-size: 28rpx;
 }
 

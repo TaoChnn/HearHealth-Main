@@ -31,6 +31,8 @@ const USAGE_SAMPLE_LIMIT = 300
 const DB_VALUE_FLOOR = 20
 const DB_VALUE_CEIL = 120
 const POINTS_LEDGER_LIMIT = 50
+// 积分排行榜单次返回上限，防止一次拉全表拖垮云函数
+const POINTS_LEADERBOARD_LIMIT = 50
 
 // 健康档案（Agent 可写、用户可见）：字段规则须与 aiFunctions/archive.js 保持一致
 const HEALTH_NOTES = 'health_notes'
@@ -565,6 +567,68 @@ async function getPointsSummary(event) {
   }
 }
 
+// 社区「护耳习惯榜」：按积分余额倒序取前 N 名。
+// 积分代表健康用耳习惯（打卡、妙招被采纳等受控流程发放），
+// 这里只做只读排行，不提供任何客户端可传入积分的入口，避免伪造排名。
+// 隐私：只输出昵称/头像/积分，openid 等身份字段不下发；仅通过 isMe 标记当前用户。
+async function getPointsLeaderboard(event) {
+  await ensureCollection('users')
+
+  const limit = Math.min(
+    POINTS_LEADERBOARD_LIMIT,
+    Math.max(1, Math.round(Number(event.limit) || 20))
+  )
+  const { OPENID } = cloud.getWXContext()
+
+  // 0 分（含老文档中缺失 pointsBalance 字段的）不计入榜单
+  const loadTop = () => db.collection('users')
+    .where({ pointsBalance: _.gt(0) })
+    .orderBy('pointsBalance', 'desc')
+    .orderBy('_id', 'asc')
+    .limit(limit)
+    .get()
+
+  let topRes
+  try {
+    topRes = await loadTop()
+  } catch (error) {
+    // 集合刚创建的瞬时失败，等待后重试一次
+    await new Promise(resolve => setTimeout(resolve, 300))
+    topRes = await loadTop()
+  }
+
+  const list = topRes.data.map((user, index) => ({
+    rank: index + 1,
+    nickname: normalizeText(user.nickname, MAX_NICKNAME_LENGTH) || DEFAULT_NICKNAME,
+    avatar: normalizeText(user.avatar, MAX_AVATAR_LENGTH),
+    points: Math.max(0, Math.round(Number(user.pointsBalance) || 0)),
+    isMe: Boolean(OPENID) && user.openid === OPENID
+  }))
+
+  // 当前用户的排名：榜单内直接取位置，榜单外按「积分高于我的人数 + 1」计算
+  let me = null
+  if (OPENID) {
+    const onBoardIndex = topRes.data.findIndex(user => user.openid === OPENID)
+    if (onBoardIndex >= 0) {
+      const mine = topRes.data[onBoardIndex]
+      me = {
+        rank: onBoardIndex + 1,
+        points: Math.max(0, Math.round(Number(mine.pointsBalance) || 0)),
+        onBoard: true
+      }
+    } else {
+      const user = await getUserDocWithRetry(OPENID)
+      const points = user ? Math.max(0, Math.round(Number(user.pointsBalance) || 0)) : 0
+      const ahead = points > 0
+        ? (await db.collection('users').where({ pointsBalance: _.gt(points) }).count()).total
+        : 0
+      me = { rank: points > 0 ? ahead + 1 : 0, points, onBoard: false }
+    }
+  }
+
+  return { success: true, data: { list, me } }
+}
+
 function pad2(value) {
   return value < 10 ? `0${value}` : `${value}`
 }
@@ -937,6 +1001,8 @@ exports.main = async (event) => {
         return await listUsage(event)
       case 'getPointsSummary':
         return await getPointsSummary(event)
+      case 'getPointsLeaderboard':
+        return await getPointsLeaderboard(event)
       case 'getHealthArchive':
         return await getHealthArchive()
       case 'addHealthNote':

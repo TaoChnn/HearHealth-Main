@@ -1,28 +1,24 @@
-<!-- 耳友圈广场（tabBar 页） -->
+<!-- 耳友圈（tabBar 页）：发布广场 / 排行榜 两个一级标签 -->
 <view class="community-page">
 
-  <!-- 分区导航栏（胶囊选中态，横向可滚动，参考 custom-tab-bar 风格） -->
-  <view class="tab-bar">
-    <scroll-view
-      class="tab-scroll"
-      scroll-x="{{true}}"
-      enhanced="{{true}}"
-      bounce="{{false}}"
-      show-scrollbar="{{false}}"
+  <!-- 顶部一级标签：发布广场 / 排行榜 -->
+  <view class="main-tabs">
+    <view
+      class="main-tab {{mainTab === 'square' ? 'main-tab--active' : ''}}"
+      data-tab="square"
+      bindtap="onSwitchMainTab"
     >
-      <view class="tab-list">
-        <view
-          class="tab-item {{activeTab === item.key ? 'tab-item--active' : ''}}"
-          wx:for="{{tabs}}"
-          wx:key="key"
-          data-key="{{item.key}}"
-          bindtap="onSwitchTab"
-        >
-          <view class="tab-bg"></view>
-          <text class="tab-text">{{item.label}}</text>
-        </view>
-      </view>
-    </scroll-view>
+      <text class="main-tab-text">发布广场</text>
+      <view class="main-tab-line"></view>
+    </view>
+    <view
+      class="main-tab {{mainTab === 'rank' ? 'main-tab--active' : ''}}"
+      data-tab="rank"
+      bindtap="onSwitchMainTab"
+    >
+      <text class="main-tab-text">排行榜</text>
+      <view class="main-tab-line"></view>
+    </view>
   </view>
 
   <!-- 可滚动内容区：关闭 iOS 橡皮筋回弹，避免强行拖拽整个页面移动 -->
@@ -33,52 +29,143 @@
     bounce="{{false}}"
     show-scrollbar="{{false}}"
   >
-    <!-- 顶部公告：引导长按 tabBar 耳友圈发帖（可关闭，关闭后本地记忆不再展示） -->
-    <view class="notice-bar" wx:if="{{showNotice}}">
-      <text class="notice-badge">公告</text>
-      <text class="notice-text">长按下方耳友圈可以发帖哦</text>
-      <text class="notice-close" bindtap="onCloseNotice">×</text>
-    </view>
-
-    <!-- 帖子流（白色圆角小卡片，参考详情页卡片样式：单一字号正文） -->
-    <view class="post-list" wx:if="{{postList.length}}">
-      <view class="post-item" wx:for="{{postList}}" wx:key="_id" bindtap="onTapPost" data-id="{{item._id}}">
-        <image class="post-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
-        <view class="post-body">
-          <view class="post-head">
-            <text class="post-nickname">{{item.nickname}}</text>
-            <text class="post-head-sep">·</text>
-            <text class="post-time">{{item.createTime}}</text>
-            <text wx:if="{{item.device}}" class="post-head-sep">·</text>
-            <text wx:if="{{item.device}}" class="post-device">{{item.device}}</text>
+    <!-- ==================== 发布广场 ==================== -->
+    <block wx:if="{{mainTab === 'square'}}">
+      <!-- 轮播图：后续可配置为公告或广告（banners 支持文案 + 渐变主题） -->
+      <swiper
+        class="banner-swiper"
+        autoplay
+        circular
+        interval="4000"
+        duration="500"
+        indicator-dots
+        indicator-color="rgba(255, 255, 255, 0.4)"
+        indicator-active-color="#ffffff"
+      >
+        <swiper-item wx:for="{{banners}}" wx:key="id">
+          <view class="banner-card banner-card--{{item.theme}}">
+            <view class="banner-chip">{{item.tag}}</view>
+            <text class="banner-title">{{item.title}}</text>
+            <text class="banner-desc">{{item.desc}}</text>
           </view>
+        </swiper-item>
+      </swiper>
 
-          <view class="post-content" wx:if="{{item.content}}">{{item.content}}</view>
+      <!-- 发帖引导公告：引导长按 tabBar 耳友圈发帖（可关闭，关闭后本地记忆不再展示） -->
+      <view class="notice-bar" wx:if="{{showNotice}}">
+        <text class="notice-badge">公告</text>
+        <text class="notice-text">长按下方耳友圈可以发帖哦</text>
+        <text class="notice-close" bindtap="onCloseNotice">×</text>
+      </view>
 
-          <view class="post-thumb" wx:if="{{item.cover}}">
-            <image class="post-thumb-img" src="{{item.cover}}" mode="aspectFill"></image>
-          </view>
+      <!-- 最新 / 板块：板块点击后展开面板选择不同板块浏览 -->
+      <view class="filter-row">
+        <view class="filter-chip filter-chip--fixed">最新</view>
+        <view
+          class="filter-chip filter-chip--picker {{activeTag !== 'all' ? 'filter-chip--picked' : ''}}"
+          bindtap="onToggleSectionPanel"
+        >
+          <text>{{activeTag === 'all' ? '板块' : activeTagLabel}}</text>
+          <text class="filter-arrow {{showSectionPanel ? 'filter-arrow--up' : ''}}">▾</text>
+        </view>
+      </view>
 
-          <view class="post-stats">
-            <view class="stat-item">
-              <image class="stat-icon" src="/images/icons/like.svg"></image>
-              <text>{{item.likeCount}}</text>
+      <!-- 板块选择面板 -->
+      <view class="section-panel" wx:if="{{showSectionPanel}}">
+        <view
+          class="section-item {{activeTag === item.key ? 'section-item--active' : ''}}"
+          wx:for="{{sections}}"
+          wx:key="key"
+          data-key="{{item.key}}"
+          bindtap="onSelectSection"
+        >{{item.label}}</view>
+      </view>
+
+      <!-- 帖子流（白色圆角小卡片，参考详情页卡片样式：单一字号正文） -->
+      <view class="post-list" wx:if="{{postList.length}}">
+        <view class="post-item" wx:for="{{postList}}" wx:key="_id" bindtap="onTapPost" data-id="{{item._id}}">
+          <image class="post-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
+          <view class="post-body">
+            <view class="post-head">
+              <text class="post-nickname">{{item.nickname}}</text>
+              <text class="post-head-sep">·</text>
+              <text class="post-time">{{item.createTime}}</text>
+              <text wx:if="{{item.device}}" class="post-head-sep">·</text>
+              <text wx:if="{{item.device}}" class="post-device">{{item.device}}</text>
             </view>
-            <view class="stat-item">
-              <image class="stat-icon" src="/images/icons/comment.svg"></image>
-              <text>{{item.commentCount}}</text>
+
+            <view class="post-content" wx:if="{{item.content}}">{{item.content}}</view>
+
+            <view class="post-thumb" wx:if="{{item.cover}}">
+              <image class="post-thumb-img" src="{{item.cover}}" mode="aspectFill"></image>
             </view>
-            <view class="stat-item">
-              <image class="stat-icon" src="/images/icons/star.svg"></image>
-              <text>{{item.favCount}}</text>
+
+            <view class="post-stats">
+              <view class="stat-item">
+                <image class="stat-icon" src="/images/icons/like.svg"></image>
+                <text>{{item.likeCount}}</text>
+              </view>
+              <view class="stat-item">
+                <image class="stat-icon" src="/images/icons/comment.svg"></image>
+                <text>{{item.commentCount}}</text>
+              </view>
+              <view class="stat-item">
+                <image class="stat-icon" src="/images/icons/star.svg"></image>
+                <text>{{item.favCount}}</text>
+              </view>
+              <text class="post-tag-inline">{{item.tagLabel}}</text>
             </view>
-            <text class="post-tag-inline">{{item.tagLabel}}</text>
           </view>
         </view>
       </view>
-    </view>
 
-    <!-- 空状态 -->
-    <view class="empty-tip" wx:else>暂无内容，快来发布第一条帖子吧～</view>
+      <!-- 空状态 -->
+      <view class="empty-tip" wx:else>暂无内容，快来发布第一条帖子吧～</view>
+    </block>
+
+    <!-- ==================== 排行榜（护耳积分榜） ==================== -->
+    <view class="rank-page" wx:else>
+      <!-- 我的积分 -->
+      <view class="my-points">
+        <view class="my-points-left">
+          <text class="my-points-label">我的护耳积分</text>
+          <view class="my-points-value">{{myPoints ? myPoints.points : 0}}</view>
+        </view>
+        <view class="my-points-right">
+          <text class="my-points-rank" wx:if="{{myPoints && myPoints.rank > 0}}">第 {{myPoints.rank}} 名</text>
+          <text class="my-points-rank my-points-rank--muted" wx:else>暂未上榜</text>
+          <text class="my-points-tip">积分越高，代表用耳习惯越健康</text>
+        </view>
+      </view>
+
+      <view class="rank-header">
+        <text class="rank-title">护耳习惯榜</text>
+        <text class="rank-desc">积分来自护耳打卡、妙招被采纳等健康用耳行为</text>
+      </view>
+
+      <!-- 榜单 -->
+      <view class="rank-list" wx:if="{{rankList.length}}">
+        <view
+          class="rank-item {{item.isMe ? 'rank-item--me' : ''}}"
+          wx:for="{{rankList}}"
+          wx:key="rank"
+        >
+          <view class="rank-no rank-no--{{index < 3 ? index + 1 : 'normal'}}">{{index + 1}}</view>
+          <image class="rank-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
+          <view class="rank-body">
+            <text class="rank-nickname">{{item.nickname}}</text>
+            <text class="rank-badge" wx:if="{{item.isMe}}">我</text>
+          </view>
+          <view class="rank-points">{{item.points}}<text class="rank-points-unit">分</text></view>
+        </view>
+      </view>
+
+      <view class="rank-loading" wx:if="{{rankLoading}}">加载中…</view>
+      <view class="empty-tip" wx:elif="{{rankError}}">
+        <text>{{rankError}}</text>
+        <text class="empty-retry" bindtap="onRetryRank">点击重试</text>
+      </view>
+      <view class="empty-tip" wx:elif="{{!rankList.length}}">还没有人上榜，快去护耳打卡攒积分吧～</view>
+    </view>
   </scroll-view>
 </view>
