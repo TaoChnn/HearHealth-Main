@@ -12,6 +12,8 @@ cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV
 })
 
+const crypto = require('crypto')
+
 const db = cloud.database()
 const _ = db.command
 
@@ -21,6 +23,26 @@ const DAY_SAMPLE_LIMIT = 300    // 单日采样明细上限，与服务端裁剪
 const DEFAULT_DAYS = 30
 const MAX_DAYS = 60
 const MAX_USERS = 100           // 单次最多处理的用户数，防止超时
+// 积分投放（一次性运营操作）：默认额度与上限
+const DEFAULT_GRANT_POINTS = 100
+const MAX_GRANT_POINTS = 10000
+
+// 路演演示用虚拟用户：固定 openid（真实 openid 均以 o 开头，不会冲突），
+// 积分呈梯度分布，让金银铜榜有真实感。avatar 留空，前端用昵称首字彩色圆标兜底。
+const DEMO_USER_OPENID_PREFIX = 'demo_user_'
+const DEFAULT_DEMO_BIO = '关注听力健康，从每天开始'
+const DEMO_USERS = [
+  { nickname: '护耳达人小林', deviceModel: 'AirPods Pro 2', pointsBalance: 1280, testCount: 8, usageSeconds: 259200 },
+  { nickname: '山间清风', deviceModel: '索尼 WH-1000XM5', pointsBalance: 960, testCount: 7, usageSeconds: 198000 },
+  { nickname: '半岛铁盒', deviceModel: '华为 FreeBuds Pro 3', pointsBalance: 880, testCount: 6, usageSeconds: 176400 },
+  { nickname: '拾光者小周', deviceModel: '小米 Buds 5', pointsBalance: 760, testCount: 6, usageSeconds: 151200 },
+  { nickname: '深夜电台DJ', deviceModel: 'OPPO Enco X2', pointsBalance: 640, testCount: 5, usageSeconds: 129600 },
+  { nickname: '阿基里斯的龟', deviceModel: '索尼 LinkBuds S', pointsBalance: 580, testCount: 5, usageSeconds: 115200 },
+  { nickname: '咸鱼要翻身', deviceModel: 'AirPods 3', pointsBalance: 460, testCount: 4, usageSeconds: 97200 },
+  { nickname: '不吃香菜', deviceModel: '华为 FreeBuds 5', pointsBalance: 380, testCount: 4, usageSeconds: 82800 },
+  { nickname: '熬夜冠军本人', deviceModel: 'Redmi Buds 6', pointsBalance: 300, testCount: 3, usageSeconds: 64800 },
+  { nickname: '清晨六点半', deviceModel: '漫步者 NeoBuds Pro', pointsBalance: 220, testCount: 3, usageSeconds: 43200 }
+]
 const FREQUENCIES = [125, 250, 500, 1000, 2000, 4000]
 const RELATIVE_LEVELS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 const MAX_TEST_TONE_GAIN = 0.02
@@ -332,10 +354,176 @@ async function seedUser(user, options) {
   }
 }
 
+// ---------- 积分投放：给存量用户统一发放积分（幂等，可重跑） ----------
+// 与「护耳妙招被采纳」同一套记账口径：points_ledger 记流水 + users.pointsBalance 加余额。
+// 幂等性：流水 _id = gc_<sha256(batchId:openid) 前 24 位>，同一 batch 对同一用户只会发一次，
+// 重跑时已存在的流水直接跳过（极小概率并发重入会重复发放，运营操作请勿并行触发）。
+
+function buildGrantLedgerId(batchId, openid) {
+  const digest = crypto.createHash('sha256')
+    .update(`${batchId}:${openid}`)
+    .digest('hex')
+    .slice(0, 24)
+  return `gc_${digest}`
+}
+
+// 分页取全部用户（上限 limit，防止超时）
+async function listAllUsers(limit) {
+  const users = []
+  for (let skip = 0; skip < limit; skip += 100) {
+    const res = await db.collection('users').skip(skip).limit(100).get()
+    users.push(...res.data.filter(item => item.openid))
+    if (res.data.length < 100) break
+  }
+  return users
+}
+
+async function countUsers() {
+  await ensureCollection('users')
+  const res = await db.collection('users').count()
+  return { success: true, data: { userCount: res.total } }
+}
+
+async function grantToUser(user, options, now) {
+  const ledgerId = buildGrantLedgerId(options.batchId, user.openid)
+
+  // 已发过（同一 batchId）则跳过，保证重跑不重复加积分
+  const existing = await db.collection('points_ledger').doc(ledgerId).get()
+    .then(res => Boolean(res.data))
+    .catch(() => false)
+  if (existing) {
+    return { openid: user.openid, nickname: user.nickname || '', granted: false }
+  }
+
+  await db.collection('points_ledger').doc(ledgerId).set({
+    data: {
+      openid: user.openid,
+      title: options.title,
+      points: options.points,
+      sourceType: 'campaign-grant',
+      sourceId: options.batchId,
+      createdAt: now
+    }
+  })
+  await db.collection('users').doc(user._id).update({
+    data: { pointsBalance: _.inc(options.points), pointsUpdatedAt: now }
+  }).catch(() => {})
+
+  return { openid: user.openid, nickname: user.nickname || '', granted: true }
+}
+
+async function grantPoints(input) {
+  await ensureCollection('users')
+  await ensureCollection('points_ledger')
+
+  const points = Math.min(
+    MAX_GRANT_POINTS,
+    Math.max(1, Math.round(Number(input.points) || DEFAULT_GRANT_POINTS))
+  )
+  const title = typeof input.title === 'string' && input.title.trim()
+    ? input.title.trim().slice(0, 40)
+    : '耳友圈改版福利'
+  const batchId = typeof input.batchId === 'string' && input.batchId.trim()
+    ? input.batchId.trim().slice(0, 100)
+    : 'welcome-2026'
+
+  const users = await listAllUsers(MAX_USERS)
+  const now = new Date()
+  const results = []
+  for (let i = 0; i < users.length; i += 10) {
+    const chunk = users.slice(i, i + 10)
+    results.push(...await Promise.all(chunk.map(user => grantToUser(user, { points, title, batchId }, now))))
+  }
+
+  return {
+    success: true,
+    data: {
+      userCount: users.length,
+      granted: results.filter(item => item.granted).length,
+      skipped: results.filter(item => !item.granted).length,
+      points,
+      title,
+      batchId
+    }
+  }
+}
+
+// ---------- 路演演示用户：批量创建 / 一键清除 ----------
+
+// 建档字段与 userFunctions.createUser 对齐；_id 固定，重复执行是整体覆盖（幂等）
+async function upsertDemoUser(entry, now) {
+  const openid = DEMO_USER_OPENID_PREFIX + entry.nickname
+  const docId = crypto.createHash('sha256').update(openid).digest('hex').slice(0, 24)
+  await db.collection('users').doc(docId).set({
+    data: {
+      openid,
+      nickname: entry.nickname,
+      avatar: '',
+      bio: DEFAULT_DEMO_BIO,
+      deviceModel: entry.deviceModel,
+      profileUpdatedAt: now.getTime(),
+      settings: {
+        reminderThreshold: 2,
+        healthReminder: true,
+        testReminder: true,
+        communityMessage: true
+      },
+      testCount: entry.testCount,
+      usageSeconds: entry.usageSeconds,
+      pointsBalance: entry.pointsBalance,
+      pointsUpdatedAt: now,
+      createdAt: now,
+      lastLoginAt: now,
+      isDemoUser: true
+    }
+  })
+  return { nickname: entry.nickname, openid }
+}
+
+async function createDemoUsers() {
+  await ensureCollection('users')
+
+  const now = new Date()
+  const created = []
+  for (const entry of DEMO_USERS) {
+    created.push(await upsertDemoUser(entry, now))
+  }
+
+  return {
+    success: true,
+    data: {
+      created: created.length,
+      users: created,
+      hint: '如需给真实用户也发积分，请另外执行 {"mode":"grant"}；清除演示用户执行 {"mode":"removeDemoUsers"}'
+    }
+  }
+}
+
+async function removeDemoUsers() {
+  await ensureCollection('users')
+
+  const res = await db.collection('users')
+    .where({ openid: _.regex({ regexp: '^' + DEMO_USER_OPENID_PREFIX }) })
+    .remove()
+
+  return {
+    success: true,
+    data: { removed: res.stats ? res.stats.removed : 0 }
+  }
+}
+
 // ---------- 入口 ----------
 
 exports.main = async (event) => {
   const input = event || {}
+
+  // 运营/排查模式：{"mode":"count"} 查用户数；{"mode":"grant"} 发放积分；
+  // {"mode":"demoUsers"} 创建路演演示用户；{"mode":"removeDemoUsers"} 一键清除
+  if (input.mode === 'count') return countUsers()
+  if (input.mode === 'grant') return grantPoints(input)
+  if (input.mode === 'demoUsers') return createDemoUsers()
+  if (input.mode === 'removeDemoUsers') return removeDemoUsers()
+
   const days = Math.min(MAX_DAYS, Math.max(1, Number(input.days) || DEFAULT_DAYS))
   const includeToday = Boolean(input.includeToday)
   const preserveExistingDays = Boolean(input.preserveExistingDays)
@@ -348,12 +536,7 @@ exports.main = async (event) => {
   await ensureCollection('test_records')
 
   // 分页取全部用户（上限 MAX_USERS，防止超时；账号多时可传 openids 分批跑）
-  const users = []
-  for (let skip = 0; skip < MAX_USERS; skip += 100) {
-    const res = await db.collection('users').skip(skip).limit(100).get()
-    users.push(...res.data.filter(item => item.openid))
-    if (res.data.length < 100) break
-  }
+  const users = await listAllUsers(MAX_USERS)
 
   const targets = onlyOpenids
     ? users.filter(item => onlyOpenids.includes(item.openid))

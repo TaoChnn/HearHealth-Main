@@ -15,7 +15,12 @@
     <view class="post-title">{{post.title}}</view>
 
     <view class="author-row">
-      <image class="author-avatar" src="{{post.avatar || defaultAvatar}}" mode="aspectFill"></image>
+      <image
+        class="author-avatar"
+        src="{{post.avatar || defaultAvatar}}"
+        mode="aspectFill"
+        binderror="onPostAvatarError"
+      ></image>
       <view class="author-meta">
         <view class="author-nickname">{{post.nickname}}</view>
         <view class="author-sub">{{post.createTime}}<text wx:if="{{post.device}}"> · {{post.device}}</text></view>
@@ -61,7 +66,13 @@
   <view class="comment-card">
     <view class="comment-header">评论 {{post.commentCount}}</view>
     <view class="comment-item" wx:for="{{comments}}" wx:key="_id">
-      <image class="comment-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
+      <image
+        class="comment-avatar"
+        src="{{item.avatar || defaultAvatar}}"
+        mode="aspectFill"
+        binderror="onCommentAvatarError"
+        data-index="{{index}}"
+      ></image>
       <view class="comment-body">
         <view class="comment-meta">
           <text class="comment-nickname">{{item.nickname}}</text>

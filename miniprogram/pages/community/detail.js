@@ -125,5 +125,20 @@ Page({
 
   onBack() {
     wx.navigateBack({ delta: 1 })
+  },
+
+  // 头像加载失败（云存储权限/文件缺失等）时回落到默认头像
+  onPostAvatarError() {
+    if (this.data.post && this.data.post.avatar) {
+      this.setData({ 'post.avatar': '' })
+    }
+  },
+
+  onCommentAvatarError(e) {
+    const { index } = e.currentTarget.dataset
+    const comment = this.data.comments[index]
+    if (comment && comment.avatar) {
+      this.setData({ [`comments[${index}].avatar`]: '' })
+    }
   }
 })

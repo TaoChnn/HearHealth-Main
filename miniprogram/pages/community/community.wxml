@@ -44,6 +44,8 @@
       >
         <swiper-item wx:for="{{banners}}" wx:key="id">
           <view class="banner-card banner-card--{{item.theme}}">
+            <view class="banner-shape banner-shape--large banner-shape--{{item.theme}}"></view>
+            <view class="banner-shape banner-shape--small banner-shape--{{item.theme}}"></view>
             <view class="banner-chip">{{item.tag}}</view>
             <text class="banner-title">{{item.title}}</text>
             <text class="banner-desc">{{item.desc}}</text>
@@ -52,39 +54,46 @@
       </swiper>
 
       <!-- 发帖引导公告：引导长按 tabBar 耳友圈发帖（可关闭，关闭后本地记忆不再展示） -->
-      <view class="notice-bar" wx:if="{{showNotice}}">
+      <view class="notice-bar" wx:if="{{showNotice}}" bindtap="onShowPointsRules">
         <text class="notice-badge">公告</text>
-        <text class="notice-text">长按下方耳友圈可以发帖哦</text>
-        <text class="notice-close" bindtap="onCloseNotice">×</text>
+        <text class="notice-text">发帖、护耳、测试都能攒积分</text>
+        <text class="notice-link">查看规则</text>
+        <text class="notice-close" catchtap="onCloseNotice">×</text>
       </view>
 
-      <!-- 最新 / 板块：板块点击后展开面板选择不同板块浏览 -->
-      <view class="filter-row">
-        <view class="filter-chip filter-chip--fixed">最新</view>
-        <view
-          class="filter-chip filter-chip--picker {{activeTag !== 'all' ? 'filter-chip--picked' : ''}}"
-          bindtap="onToggleSectionPanel"
-        >
-          <text>{{activeTag === 'all' ? '板块' : activeTagLabel}}</text>
-          <text class="filter-arrow {{showSectionPanel ? 'filter-arrow--up' : ''}}">▾</text>
+      <!-- 板块横向标签栏：最新代表全部内容，始终只有一个选中项 -->
+      <scroll-view
+        class="section-scroll"
+        scroll-x
+        enhanced
+        show-scrollbar="{{false}}"
+      >
+        <view class="section-track">
+          <view
+            id="section-{{item.key}}"
+            class="section-tab {{activeTag === item.key ? 'section-tab--active' : ''}}"
+            wx:for="{{sections}}"
+            wx:key="key"
+            data-key="{{item.key}}"
+            hover-class="section-tab--pressed"
+            hover-stay-time="80"
+            bindtap="onSelectSection"
+          >
+            {{item.key === 'all' ? '最新' : item.label}}
+          </view>
         </view>
-      </view>
-
-      <!-- 板块选择面板 -->
-      <view class="section-panel" wx:if="{{showSectionPanel}}">
-        <view
-          class="section-item {{activeTag === item.key ? 'section-item--active' : ''}}"
-          wx:for="{{sections}}"
-          wx:key="key"
-          data-key="{{item.key}}"
-          bindtap="onSelectSection"
-        >{{item.label}}</view>
-      </view>
+      </scroll-view>
 
       <!-- 帖子流（白色圆角小卡片，参考详情页卡片样式：单一字号正文） -->
       <view class="post-list" wx:if="{{postList.length}}">
         <view class="post-item" wx:for="{{postList}}" wx:key="_id" bindtap="onTapPost" data-id="{{item._id}}">
-          <image class="post-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
+          <image
+            class="post-avatar"
+            src="{{item.avatar || defaultAvatar}}"
+            mode="aspectFill"
+            binderror="onAvatarError"
+            data-index="{{index}}"
+          ></image>
           <view class="post-body">
             <view class="post-head">
               <text class="post-nickname">{{item.nickname}}</text>
@@ -127,20 +136,31 @@
     <view class="rank-page" wx:else>
       <!-- 我的积分 -->
       <view class="my-points">
+        <view class="rank-shape rank-shape--ring"></view>
+        <view class="rank-shape rank-shape--disc"></view>
         <view class="my-points-left">
-          <text class="my-points-label">我的护耳积分</text>
-          <view class="my-points-value">{{myPoints ? myPoints.points : 0}}</view>
+          <text class="my-points-label">我的积分</text>
+          <view class="my-points-value-row">
+            <text class="my-points-value">{{myPoints ? myPoints.points : 0}}</text>
+            <text class="my-points-unit">分</text>
+          </view>
         </view>
-        <view class="my-points-right">
+        <view class="my-points-actions">
           <text class="my-points-rank" wx:if="{{myPoints && myPoints.rank > 0}}">第 {{myPoints.rank}} 名</text>
-          <text class="my-points-rank my-points-rank--muted" wx:else>暂未上榜</text>
-          <text class="my-points-tip">积分越高，代表用耳习惯越健康</text>
+          <text class="my-points-rank my-points-rank--muted" wx:else>未上榜</text>
+          <view class="points-rule-entry" bindtap="onShowPointsRules" hover-class="points-rule-entry--pressed">
+            <text>积分规则</text>
+            <text class="points-rule-arrow">›</text>
+          </view>
+          <view class="points-shop-entry" bindtap="onGoPointsShop" hover-class="points-shop-entry--pressed">
+            <text>积分商城</text>
+            <text class="points-shop-arrow">›</text>
+          </view>
         </view>
       </view>
 
       <view class="rank-header">
         <text class="rank-title">护耳习惯榜</text>
-        <text class="rank-desc">积分来自护耳打卡、妙招被采纳等健康用耳行为</text>
       </view>
 
       <!-- 榜单 -->
@@ -151,7 +171,15 @@
           wx:key="rank"
         >
           <view class="rank-no rank-no--{{index < 3 ? index + 1 : 'normal'}}">{{index + 1}}</view>
-          <image class="rank-avatar" src="{{item.avatar || defaultAvatar}}" mode="aspectFill"></image>
+          <image
+            wx:if="{{item.avatar}}"
+            class="rank-avatar"
+            src="{{item.avatar}}"
+            mode="aspectFill"
+            binderror="onRankAvatarError"
+            data-index="{{index}}"
+          ></image>
+          <view wx:else class="rank-avatar rank-avatar--text rank-avatar-color-{{index % 6}}">{{item.nickname[0]}}</view>
           <view class="rank-body">
             <text class="rank-nickname">{{item.nickname}}</text>
             <text class="rank-badge" wx:if="{{item.isMe}}">我</text>
@@ -168,4 +196,30 @@
       <view class="empty-tip" wx:elif="{{!rankList.length}}">还没有人上榜，快去护耳打卡攒积分吧～</view>
     </view>
   </scroll-view>
+
+  <view class="rules-mask" wx:if="{{showPointsRules}}" bindtap="onClosePointsRules">
+    <view class="rules-sheet" catchtap="stopRulesPropagation">
+      <view class="rules-handle"></view>
+      <view class="rules-sheet-header">
+        <view>
+          <view class="rules-kicker">POINTS GUIDE</view>
+          <view class="rules-title">积分规则</view>
+        </view>
+        <view class="rules-close" bindtap="onClosePointsRules">×</view>
+      </view>
+      <scroll-view class="rules-scroll" scroll-y>
+        <view class="rules-group" wx:for="{{pointsRules}}" wx:key="title">
+          <view class="rules-group-title">{{item.title}}</view>
+          <view class="rules-row" wx:for="{{item.items}}" wx:key="name">
+            <view class="rules-row-copy">
+              <view class="rules-row-name">{{item.name}}</view>
+              <view class="rules-row-limit">{{item.limit}}</view>
+            </view>
+            <view class="rules-points">+{{item.points}}</view>
+          </view>
+        </view>
+        <view class="rules-note">积分发放以云端审核结果为准；异常、重复或低质量内容不参与奖励。</view>
+      </scroll-view>
+    </view>
+  </view>
 </view>

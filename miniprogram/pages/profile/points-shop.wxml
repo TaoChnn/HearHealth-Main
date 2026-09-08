@@ -1,47 +1,122 @@
 <view class="points-shop-page">
-  <view class="shop-header">
-    <view class="shop-kicker">POINTS MARKET</view>
-    <view class="shop-title">积分商城</view>
-    <view class="shop-description">让每一次护耳行动与优质分享，都沉淀为看得见的成长。</view>
-  </view>
-
-  <view class="balance-card">
-    <view class="balance-copy">
-      <view class="balance-label">当前积分</view>
-      <view class="balance-value">{{pointsBalance}}</view>
-      <view class="balance-caption" wx:if="{{pointsLoading}}">正在同步积分账户…</view>
-      <view class="balance-caption balance-caption--error" wx:elif="{{pointsError}}">同步失败，当前显示上次余额</view>
-      <view class="balance-caption" wx:else>每一笔积分变动都会记录在明细中</view>
-    </view>
-    <view class="balance-medal" aria-hidden="true">
-      <view class="balance-medal-star">★</view>
-    </view>
-  </view>
-
-  <!-- 游客：积分属于云端账号数据，先引导登录而不是静默建档 -->
-  <view class="shop-section login-gate" wx:if="{{needLogin}}">
-    <view class="login-gate-symbol" aria-hidden="true">◈</view>
-    <view class="login-gate-title">登录后查看积分账户</view>
-    <view class="login-gate-description">积分余额与明细保存在你的云端账号中，登录后即可查看。</view>
-    <button class="login-gate-button" bindtap="onGoLogin">去登录</button>
-  </view>
-
-  <view class="shop-section ledger-section" wx:else>
-    <view class="section-heading">
+  <view class="shop-hero">
+    <view class="hero-orb hero-orb--one"></view>
+    <view class="hero-orb hero-orb--two"></view>
+    <view class="hero-topline">
       <view>
-        <view class="section-title">积分明细</view>
-        <view class="section-description">记录积分获得与兑换情况</view>
+        <view class="hero-eyebrow">HEAR REWARDS</view>
+        <view class="hero-title">积分好礼</view>
       </view>
-      <view class="section-count" wx:if="{{pointsEntries.length}}">{{pointsEntries.length}} 笔</view>
+      <view class="hero-record" data-view="orders" bindtap="onViewTap">
+        <text>兑换记录</text>
+        <text class="hero-record-arrow">›</text>
+      </view>
+    </view>
+    <view class="balance-row">
+      <view class="balance-copy">
+        <view class="balance-label">可用积分</view>
+        <view class="balance-value">{{pointsLoading ? '—' : pointsBalance}}</view>
+      </view>
+      <view class="balance-mark">
+        <view class="balance-mark-inner">H</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="login-banner" wx:if="{{needLogin}}">
+    <view class="login-copy">
+      <view class="login-title">登录后兑换好礼</view>
+      <view class="login-description">同步积分余额与兑换记录</view>
+    </view>
+    <view class="login-button" bindtap="onGoLogin">去登录</view>
+  </view>
+
+  <view class="error-banner" wx:if="{{pointsError}}">
+    <text>{{pointsError}}</text>
+    <text class="error-retry" bindtap="retryPoints">重新加载</text>
+  </view>
+
+  <view class="view-tabs">
+    <view class="view-tab {{activeView === 'products' ? 'view-tab--active' : ''}}" data-view="products" bindtap="onViewTap">精选好物</view>
+    <view class="view-tab {{activeView === 'orders' ? 'view-tab--active' : ''}}" data-view="orders" bindtap="onViewTap">兑换记录</view>
+    <view class="view-tab {{activeView === 'points' ? 'view-tab--active' : ''}}" data-view="points" bindtap="onViewTap">积分明细</view>
+  </view>
+
+  <block wx:if="{{activeView === 'products'}}">
+    <scroll-view class="category-scroll" scroll-x show-scrollbar="{{false}}">
+      <view class="category-row">
+        <view
+          class="category-chip {{activeCategory === item.id ? 'category-chip--active' : ''}}"
+          wx:for="{{categories}}"
+          wx:key="id"
+          data-category="{{item.id}}"
+          bindtap="onCategoryTap"
+        >{{item.label}}</view>
+      </view>
+    </scroll-view>
+
+    <view class="section-heading">
+      <view class="section-title">为你精选</view>
+      <view class="section-meta">每人每款限兑 1 件</view>
     </view>
 
-    <view class="ledger-state" wx:if="{{pointsLoading}}">正在加载积分记录…</view>
-    <view class="ledger-state ledger-state--error" wx:elif="{{pointsError}}">
-      <view>{{pointsError}}</view>
-      <button class="retry-button" bindtap="retryPoints">重新加载</button>
+    <view class="product-grid">
+      <view
+        class="product-card"
+        wx:for="{{visibleProducts}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="onProductTap"
+        hover-class="product-card--pressed"
+      >
+        <view class="product-media">
+          <image class="product-image" src="{{item.image}}" mode="aspectFit"></image>
+          <view class="product-tag">{{item.categoryLabel}}</view>
+          <view class="product-status" wx:if="{{item.redeemed}}">已兑换</view>
+          <view class="product-status product-status--sold" wx:elif="{{item.soldOut}}">已兑完</view>
+        </view>
+        <view class="product-info">
+          <view class="product-name">{{item.name}}</view>
+          <view class="product-description">{{item.description}}</view>
+          <view class="product-footer">
+            <view class="product-price"><text>{{item.points}}</text><text class="product-price-unit">积分</text></view>
+            <view class="product-go">›</view>
+          </view>
+        </view>
+      </view>
     </view>
-    <view class="ledger-list" wx:elif="{{pointsEntries.length}}">
+  </block>
+
+  <block wx:elif="{{activeView === 'orders'}}">
+    <view class="list-heading">
+      <view class="section-title">我的兑换</view>
+      <view class="section-meta">{{orders.length}} 笔记录</view>
+    </view>
+    <view class="record-list" wx:if="{{orders.length}}">
+      <view class="order-row" wx:for="{{orders}}" wx:key="id">
+        <image class="order-image" src="{{item.productImage}}" mode="aspectFill"></image>
+        <view class="order-copy">
+          <view class="order-name">{{item.productName}}</view>
+          <view class="order-meta">{{item.timeText}} · {{item.points}} 积分</view>
+        </view>
+        <view class="order-status order-status--{{item.status}}">{{item.statusLabel}}</view>
+      </view>
+    </view>
+    <view class="empty-state" wx:else>
+      <view class="empty-icon">◇</view>
+      <view class="empty-title">还没有兑换记录</view>
+      <view class="empty-action" data-view="products" bindtap="onViewTap">去逛逛</view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="list-heading">
+      <view class="section-title">积分明细</view>
+      <view class="section-meta">最近 {{pointsEntries.length}} 笔</view>
+    </view>
+    <view class="record-list" wx:if="{{pointsEntries.length}}">
       <view class="ledger-row" wx:for="{{pointsEntries}}" wx:key="id">
+        <view class="ledger-symbol ledger-symbol--{{item.direction}}">{{item.direction === 'credit' ? '+' : '−'}}</view>
         <view class="ledger-copy">
           <view class="ledger-title">{{item.title}}</view>
           <view class="ledger-time">{{item.timeText}}</view>
@@ -49,38 +124,45 @@
         <view class="ledger-points ledger-points--{{item.direction}}">{{item.pointsText}}</view>
       </view>
     </view>
-    <view class="ledger-state" wx:else>还没有积分记录，优质护耳贡献会显示在这里。</view>
-  </view>
-
-  <view class="shop-section">
-    <view class="section-heading">
-      <view>
-        <view class="section-title">奖励分类</view>
-        <view class="section-description">首批奖励方向，具体内容后续逐步上架</view>
-      </view>
-      <view class="section-count">3 类</view>
+    <view class="empty-state" wx:else>
+      <view class="empty-icon">◎</view>
+      <view class="empty-title">暂无积分记录</view>
     </view>
+  </block>
 
-    <view class="category-list">
-      <view
-        class="category-row"
-        wx:for="{{rewardCategories}}"
-        wx:key="id"
-      >
-        <view class="category-mark category-mark--{{item.id}}">{{item.mark}}</view>
-        <view class="category-copy">
-          <view class="category-title">{{item.title}}</view>
-          <view class="category-description">{{item.description}}</view>
+  <view class="shop-note">奖品数量有限，兑换成功后由工作人员核验并安排发放。</view>
+
+  <view class="sheet-mask" wx:if="{{showProductSheet}}" bindtap="onCloseProduct">
+    <view class="product-sheet" catchtap="stopPropagation">
+      <view class="sheet-handle"></view>
+      <image class="sheet-image" src="{{selectedProduct.image}}" mode="aspectFit"></image>
+      <view class="sheet-content">
+        <view class="sheet-category">{{selectedProduct.categoryLabel}}</view>
+        <view class="sheet-name">{{selectedProduct.name}}</view>
+        <view class="sheet-description">{{selectedProduct.description}}</view>
+        <view class="sheet-facts">
+          <view class="sheet-fact">
+            <view class="sheet-fact-value">{{selectedProduct.points}}</view>
+            <view class="sheet-fact-label">所需积分</view>
+          </view>
+          <view class="sheet-divider"></view>
+          <view class="sheet-fact">
+            <view class="sheet-fact-value">{{selectedProduct.remainingStock}}</view>
+            <view class="sheet-fact-label">剩余数量</view>
+          </view>
+          <view class="sheet-divider"></view>
+          <view class="sheet-fact">
+            <view class="sheet-fact-value">1</view>
+            <view class="sheet-fact-label">每人限兑</view>
+          </view>
         </view>
+        <view
+          class="redeem-button {{selectedProduct.canRedeem ? '' : 'redeem-button--disabled'}}"
+          data-id="{{selectedProduct.id}}"
+          bindtap="onRedeemSelected"
+        >{{redeeming ? '兑换中…' : selectedProduct.actionText}}</view>
+        <view class="sheet-note">兑换时需授权微信收货地址</view>
       </view>
     </view>
   </view>
-
-  <view class="empty-card">
-    <view class="empty-symbol" aria-hidden="true">◇</view>
-    <view class="empty-title">商品准备中</view>
-    <view class="empty-description">商城入口已经就绪。下一阶段将接入积分明细、奖励库存与兑换流程。</view>
-  </view>
-
-  <view class="shop-note">积分属于应用内成长记录，不可提现或转让；兑换规则以上架商品说明为准。</view>
 </view>

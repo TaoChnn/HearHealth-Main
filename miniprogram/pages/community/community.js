@@ -22,6 +22,28 @@ const SECTIONS = [
   { key: 'mood', label: '心情树洞' }
 ]
 
+const POINTS_RULES = [
+  {
+    title: '日常护耳',
+    items: [
+      { name: '每日健康护耳达标', points: 10, limit: '每日 1 次' },
+      { name: '连续健康护耳 7 天', points: 30, limit: '每 7 天 1 次' },
+      { name: '完成听力测试', points: 20, limit: '每月 1 次' },
+      { name: '间隔 30 天更新测试结果', points: 30, limit: '每月 1 次' }
+    ]
+  },
+  {
+    title: '社区贡献',
+    items: [
+      { name: '发布普通帖子', points: 5, limit: '每日最多 2 次' },
+      { name: '发布护耳妙招', points: 15, limit: '每日最多 1 次' },
+      { name: '发布测听报告或科普内容', points: 10, limit: '每日最多 1 次' },
+      { name: '妙招被官方采纳', points: 100, limit: '每篇仅 1 次' },
+      { name: '帖子获得首个点赞或评论', points: 2, limit: '每日最多 10 分' }
+    ]
+  }
+]
+
 Page({
   data: {
     defaultAvatar: '/images/icons/avatar.png',
@@ -32,9 +54,9 @@ Page({
 
     // 板块筛选
     activeTag: 'all',
-    activeTagLabel: '全部',
-    showSectionPanel: false,
     sections: SECTIONS,
+    showPointsRules: false,
+    pointsRules: POINTS_RULES,
 
     // 轮播图：后续可换成后台配置的公告 / 广告
     banners: [
@@ -86,27 +108,29 @@ Page({
     wx.setStorageSync(COMMUNITY_NOTICE_CLOSED_KEY, true)
   },
 
+  onShowPointsRules() {
+    this.setData({ showPointsRules: true })
+  },
+
+  onClosePointsRules() {
+    this.setData({ showPointsRules: false })
+  },
+
+  stopRulesPropagation() {},
+
   // 切换一级标签：发布广场 / 排行榜
   onSwitchMainTab(e) {
     const tab = e.currentTarget.dataset.tab
     if (tab === this.data.mainTab) return
-    this.setData({ mainTab: tab, showSectionPanel: false })
+    this.setData({ mainTab: tab })
     if (tab === 'rank') this.loadRank()
   },
 
-  onToggleSectionPanel() {
-    this.setData({ showSectionPanel: !this.data.showSectionPanel })
-  },
-
-  // 选择板块后收起面板并重新拉取该板块的帖子
+  // 横向标签切换板块并重新拉取对应帖子
   onSelectSection(e) {
     const key = e.currentTarget.dataset.key
-    const section = this.data.sections.find(item => item.key === key)
-    this.setData({
-      activeTag: key,
-      activeTagLabel: section ? section.label : '全部',
-      showSectionPanel: false
-    })
+    if (!key || key === this.data.activeTag) return
+    this.setData({ activeTag: key })
     this.loadPosts(key)
   },
 
@@ -142,6 +166,28 @@ Page({
 
   onRetryRank() {
     this.loadRank()
+  },
+
+  onGoPointsShop() {
+    wx.navigateTo({ url: '/pages/profile/points-shop' })
+  },
+
+  // 头像加载失败（云存储权限/文件缺失等）时回落到默认头像
+  onAvatarError(e) {
+    const { index } = e.currentTarget.dataset
+    const post = this.data.postList[index]
+    if (post && post.avatar) {
+      this.setData({ [`postList[${index}].avatar`]: '' })
+    }
+  },
+
+  // 榜单头像失败时清空，切到昵称首字彩色圆标
+  onRankAvatarError(e) {
+    const { index } = e.currentTarget.dataset
+    const user = this.data.rankList[index]
+    if (user && user.avatar) {
+      this.setData({ [`rankList[${index}].avatar`]: '' })
+    }
   },
 
   onTapPost(e) {

@@ -1,18 +1,6 @@
 <view class="chat-page">
   <view class="mode-banner" wx:if="{{modeHint}}">{{modeHint}}</view>
 
-  <!-- 会话工具条：新对话 / 历史 -->
-  <view class="chat-toolbar">
-    <view class="toolbar-btn" hover-class="toolbar-btn--pressed" hover-stay-time="80" bindtap="onNewChat">
-      <image class="toolbar-icon" src="/images/chat-new.svg" mode="aspectFit"></image>
-      <text>新对话</text>
-    </view>
-    <view class="toolbar-btn" hover-class="toolbar-btn--pressed" hover-stay-time="80" bindtap="onOpenHistory">
-      <image class="toolbar-icon" src="/images/chat-history.svg" mode="aspectFit"></image>
-      <text>历史</text>
-    </view>
-  </view>
-
   <scroll-view
     class="chat-scroll"
     scroll-y
@@ -21,17 +9,13 @@
     scroll-into-view="{{scrollTarget}}"
   >
     <view class="chat-content">
-      <!-- 空状态：bot 出场 + 居中欢迎语，不做白盒卡片 -->
+      <!-- 空状态：保留 BT·01 作为助手的核心形象 -->
       <view class="welcome" wx:if="{{!messages.length}}">
         <view class="welcome-bot bt01-avatar" aria-hidden="true"></view>
-        <view class="welcome-title">嗨，我是你的用耳小助手</view>
+        <view class="welcome-title">今天想聊聊什么？</view>
         <view class="welcome-text">
-          <view>听力报告、用耳习惯、耳鸣困扰，都可以问我</view>
-          <view>我也能帮你把重要的事记进健康档案</view>
-        </view>
-        <view class="archive-entry" bindtap="onOpenArchive" hover-class="archive-entry--pressed" hover-stay-time="80">
-          <text class="archive-entry-text">查看我的健康档案</text>
-          <image class="archive-entry-arrow" src="/images/arrow.svg" mode="aspectFit"></image>
+          <view>我会结合你的听力记录与用耳习惯，</view>
+          <view>给出清晰、可靠的健康建议。</view>
         </view>
         <view class="suggestion-block">
           <view class="suggestion-label">你可以问问</view>
@@ -120,10 +104,30 @@
   </scroll-view>
 
   <view class="chat-footer">
+    <!-- 固定在输入框上方的快捷操作，方便在任何会话状态下使用 -->
+    <view class="quick-actions">
+      <view class="quick-card" hover-class="quick-card--pressed" hover-stay-time="80" bindtap="onOpenArchive">
+        <view class="quick-card-archive-icon" aria-hidden="true">
+          <view></view>
+          <view></view>
+        </view>
+        <text class="quick-card-title">健康档案</text>
+      </view>
+      <view class="quick-card" hover-class="quick-card--pressed" hover-stay-time="80" bindtap="onNewChat">
+        <image class="quick-card-icon" src="/images/chat-new.svg" mode="aspectFit"></image>
+        <text class="quick-card-title">新对话</text>
+      </view>
+      <view class="quick-card" hover-class="quick-card--pressed" hover-stay-time="80" bindtap="onOpenHistory">
+        <image class="quick-card-icon" src="/images/chat-history.svg" mode="aspectFit"></image>
+        <text class="quick-card-title">历史</text>
+      </view>
+    </view>
     <view class="composer">
       <textarea
         class="composer-input"
         value="{{inputValue}}"
+        placeholder="问问你的听力或用耳习惯"
+        placeholder-class="composer-placeholder"
         maxlength="500"
         auto-height
         fixed

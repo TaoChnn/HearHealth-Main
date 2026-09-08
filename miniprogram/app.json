@@ -69,7 +69,8 @@
     }
   },
   "requiredPrivateInfos": [
-    "getLocation"
+    "getLocation",
+    "chooseAddress"
   ],
   "sitemapLocation": "sitemap.json",
   "style": "v2",
